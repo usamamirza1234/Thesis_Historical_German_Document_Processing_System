@@ -1,0 +1,13 @@
+name: Thesis_Historical_German_Document_Processing_System
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12.11
+  - opencv
+  - numpy
+  - matplotlib
+  - pytesseract
+  - pillow
+  - pdf2image
+  - scikit-learn

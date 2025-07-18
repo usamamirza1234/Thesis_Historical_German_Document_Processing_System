@@ -1,0 +1,36 @@
+# Ignore PDFs
+*.pdf
+**/*.pdf
+pdfs/
+
+# Ignore images
+*.jpg
+*.jpeg
+*.png
+*.tiff
+*.bmp
+*.gif
+
+# Ignore models
+*.h5
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# Ignore archives
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Ignore intermediate output
+temp2/
+output/
+results/
+
+# Other common stuff
+.DS_Store
+Thumbs.db
+*.log
+*.bak
