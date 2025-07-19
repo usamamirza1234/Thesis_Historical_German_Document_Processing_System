@@ -119,10 +119,67 @@ class ImageProcessor:
             output_dir=self.config.output_directory
         )
 
+    def _is_image_in_output_directory(self, image_path: str) -> bool:
+        """Check if the image is already in the output directory"""
+        try:
+            # Get the absolute paths to compare properly
+            image_abs_path = os.path.abspath(image_path)
+            output_abs_path = os.path.abspath(self.config.output_directory)
+
+            # Check if the image path is within or is the output directory
+            return image_abs_path.startswith(output_abs_path)
+        except Exception as e:
+            logger.debug(f"Error checking image path: {e}")
+            return False
+
+    def _should_skip_processing(self, image_path: str) -> bool:
+        """Determine if processing should be skipped for this image"""
+        # Check if image is in output directory
+        if self._is_image_in_output_directory(image_path):
+            return True
+
+        # Check if it's a temporary or processed file based on filename patterns
+        filename = os.path.basename(image_path).lower()
+        skip_patterns = [
+            'processed_',
+            'temp_page_',
+            '_step_',
+            'debug_',
+            'intermediate_',
+            'pipeline_'
+        ]
+
+        for pattern in skip_patterns:
+            if pattern in filename:
+                return True
+
+        return False
+
     def process_image(self, image_path: str,
                       custom_pipeline: Optional[ProcessingPipeline] = None) -> ProcessingResult:
         """Process image using default or custom pipeline"""
         try:
+            # Check if we should skip processing this image
+            if self._should_skip_processing(image_path):
+                logger.warning(
+                    f"Skipping processing - image appears to be already processed or in output directory: {image_path}")
+
+                # Return the image as-is without processing
+                try:
+                    image = ImageHandler.load_image(image_path)
+                    return ProcessingResult(
+                        success=True,
+                        data=image,
+                        processing_time=0.0,
+                        warnings=[f"Skipped processing - image in output directory"]
+                    )
+                except Exception as e:
+                    return ProcessingResult(
+                        success=False,
+                        error=f"Failed to load already processed image: {e}",
+                        processing_time=0.0
+                    )
+
             # Load image
             image = ImageHandler.load_image(image_path)
 
@@ -145,3 +202,86 @@ class ImageProcessor:
         except Exception as e:
             logger.error(f"Error processing image {image_path}: {e}")
             return ProcessingResult(success=False, error=str(e))
+
+    def force_process_image(self, image_path: str,
+                            custom_pipeline: Optional[ProcessingPipeline] = None) -> ProcessingResult:
+        """Force process image even if it's in output directory (bypass skip check)"""
+        try:
+            logger.info(f"Force processing image: {image_path}")
+
+            # Load image
+            image = ImageHandler.load_image(image_path)
+
+            # Use custom pipeline or default
+            pipeline = custom_pipeline or self.default_pipeline
+
+            # Get image name for intermediate files
+            image_name = os.path.splitext(os.path.basename(image_path))[0]
+
+            # Process image
+            result = pipeline.process(image, image_name)
+
+            if result.success:
+                logger.info(f"Successfully force processed {image_path} in {result.processing_time:.2f}s")
+            else:
+                logger.error(f"Failed to force process {image_path}: {result.error}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error force processing image {image_path}: {e}")
+            return ProcessingResult(success=False, error=str(e))
+
+    def get_processing_info(self, image_path: str) -> Dict[str, Any]:
+        """Get information about whether an image would be processed"""
+        info = {
+            'image_path': image_path,
+            'exists': os.path.exists(image_path),
+            'in_output_directory': self._is_image_in_output_directory(image_path),
+            'would_skip': self._should_skip_processing(image_path),
+            'output_directory': self.config.output_directory,
+            'filename': os.path.basename(image_path)
+        }
+
+        if info['would_skip']:
+            info['skip_reason'] = []
+            if info['in_output_directory']:
+                info['skip_reason'].append('in_output_directory')
+
+            filename = os.path.basename(image_path).lower()
+            skip_patterns = ['processed_', 'temp_page_', '_step_', 'debug_', 'intermediate_', 'pipeline_']
+            for pattern in skip_patterns:
+                if pattern in filename:
+                    info['skip_reason'].append(f'filename_contains_{pattern.strip("_")}')
+
+        return info
+
+    def clean_output_directory(self, patterns: Optional[List[str]] = None) -> int:
+        """Clean up files in output directory matching certain patterns"""
+        if patterns is None:
+            patterns = ['processed_*', 'temp_page_*', '*_step_*', 'debug_*']
+
+        cleaned_count = 0
+
+        try:
+            import glob
+
+            for pattern in patterns:
+                full_pattern = os.path.join(self.config.output_directory, pattern)
+                files_to_remove = glob.glob(full_pattern)
+
+                for file_path in files_to_remove:
+                    try:
+                        os.remove(file_path)
+                        cleaned_count += 1
+                        logger.debug(f"Removed: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove {file_path}: {e}")
+
+            if cleaned_count > 0:
+                logger.info(f"Cleaned {cleaned_count} files from output directory")
+
+        except Exception as e:
+            logger.error(f"Error cleaning output directory: {e}")
+
+        return cleaned_count
