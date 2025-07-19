@@ -2,6 +2,8 @@ import logging
 import sys
 from typing import Optional
 
+from config.settings import LoggingConfig
+
 
 def setup_logging(config: LoggingConfig) -> logging.Logger:
     """Set up logging configuration"""
