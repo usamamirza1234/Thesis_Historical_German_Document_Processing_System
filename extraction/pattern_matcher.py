@@ -17,6 +17,7 @@ class Pattern:
     confidence_weight: float
     description: str
     flags: int = re.IGNORECASE | re.MULTILINE
+    parse_groups: tuple = None  # (day_group, month_group, year_group)
 
     def find_matches(self, text: str) -> List[Match]:
         """Find all matches of this pattern in text"""
@@ -44,6 +45,35 @@ class Pattern:
             logger.error(f"Regex error in pattern {self.name}: {e}")
             return []
 
+    def parse_date(self, match_value: str) -> Optional[datetime]:
+        """Parse date from this pattern's match"""
+        german_months = {
+            'januar': 1, 'februar': 2, 'märz': 3, 'april': 4, 'mai': 5,
+            'juni': 6, 'juli': 7, 'august': 8, 'september': 9,
+            'oktober': 10, 'november': 11, 'dezember': 12
+        }
+        match = re.search(self.regex, match_value)
+        if not match or not self.parse_groups:
+            return None
+
+        try:
+            day_group, month_group, year_group = self.parse_groups
+            day = int(match.group(day_group))
+            year = int(match.group(year_group))
+
+            # Handle month (number or name)
+            month_str = match.group(month_group)
+            if month_str.isdigit():
+                month = int(month_str)
+            else:
+                # Use German month names dictionary
+                month = german_months.get(month_str.lower(), None)
+                if not month:
+                    return None
+
+            return datetime(year, month, day)
+        except:
+            return None
 
 class PatternRegistry:
     """Registry for managing extraction patterns"""
@@ -67,50 +97,66 @@ class PatternRegistry:
                 name="standard_date",
                 regex=r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.8,
-                description="Standard German date format: DD. Month YYYY"
+                description="Standard German date format: DD. Month YYYY",
+                parse_groups=(1, 2, 3),
             ),
             Pattern( # Example match: "vom 5. Oktober 2022"
                 name="vom_date",
                 regex=r'vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.9,
-                description="Date with 'vom' prefix"
+                description="Date with 'vom' prefix",
+                parse_groups=(1, 2, 3),
             ),
             Pattern(  # Example match: "den 14. Juli 2021"
                 name="den_date",
                 regex=r'den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.9,
-                description="Date with 'den' prefix"
+                description="Date with 'den' prefix",
+                parse_groups=(1, 2, 3),
             ),
             Pattern(  # Example match: "(Ausgestellt am 3. Mai 2020)"
                 name="parentheses_date",
                 regex=r'\(.*?(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4}).*?\)',
                 confidence_weight=0.85,
-                description="Date in parentheses"
+                description="Date in parentheses",
+                parse_groups=(1, 2, 3),
             ),
             Pattern(  # Example match: "Stand vom 7. Januar 2024" or "Stcmd vom 7. Januar 2024"
                 name="stand_vom_date",
                 regex=r'(?:Stand|Stcmd)\s+vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.95,
-                description="High priority: Stand vom date"
+                description="High priority: Stand vom date",
+                parse_groups=(1, 2, 3),
             ),
             Pattern(  # Example match: "Berlin, den 30. November 2022"
                 name="berlin_den_date",
                 regex=r'Berlin,?\s+den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.98,
-                description="Highest priority: Official Berlin signature date"
+                description="Highest priority: Official Berlin signature date",
+                parse_groups=(1, 2, 3),
             ),
             Pattern( # Example match: 19.9.1961
                 name="numeric_date",
                 regex=r'(\d{1,2})\.(\d{1,2})\.(\d{4})',
                 confidence_weight=0.7,
-                description="Fully numeric date format: DD.MM.YYYY"
+                description="Fully numeric date format: DD.MM.YYYY",
+                parse_groups=(1, 2, 3),
             ),
             Pattern(  # Example match: "vom 10.9. 1954"
                 name="vom_numeric_date_space",
                 regex=r'vom\s+(\d{1,2})\.(\d{1,2})\.\s+(\d{4})',
                 confidence_weight=0.9,
-                description="vom with numeric date and space: vom DD.MM. YYYY"
-            )
+                description="vom with numeric date and space: vom DD.MM. YYYY",
+                parse_groups=(1, 2, 3),
+            ),
+            Pattern(  # Example match: "Stand vom 29, Oktober 1937"
+                name="stand_vom_comma_date",
+                regex=r'Stand\s+vom\s+(\d{1,2}),\s*([a-zA-ZäöüÄÖÜß]+)\s+(\d{4})',
+                confidence_weight=0.93,
+                description="Stand vom date with comma instead of period: Stand vom DD, Month YYYY",
+                parse_groups=(1, 2, 3),
+            ),
+
         ]
 
         for pattern in date_patterns:
@@ -457,21 +503,20 @@ class PatternBasedExtractor:
         return results
 
     def extract_date(self, text: str) -> Tuple[Optional[datetime], float]:
-        """Extract the best date from text with enhanced scoring"""
-        # Pre-process text to fix common OCR errors
+        """Simplified date extraction"""
+        # Pre-process OCR errors
         text = re.sub(r'\bl\.\s*([a-zA-ZäöüÄÖÜß]+)', r'1. \1', text)
 
-        # Get all date matches
+        # Get matches
         date_matches = self.pattern_registry.extract_field(text, "date")
-
         if not date_matches:
             return None, 0.0
 
-        # Parse and score dates
+        # Parse and score
         scored_dates = []
         for match in date_matches:
-            parsed_date = self.date_parser.parse_date_from_match(match)
-            # import pdb; pdb.set_trace()
+            # Use pattern's own parsing instead of duplicate code
+            parsed_date = self._parse_using_pattern(match)
             if parsed_date:
                 context_score = self.date_parser.score_date_context(match)
                 scored_dates.append((parsed_date, context_score, match))
@@ -479,10 +524,13 @@ class PatternBasedExtractor:
         if not scored_dates:
             return None, 0.0
 
-        # Return highest scoring date
-        scored_dates.sort(key=lambda x: x[1], reverse=True)
-        best_date, best_score, best_match = scored_dates[0]
-
-        logger.debug(f"Selected date: {best_date} with score {best_score:.2f} from pattern {best_match.pattern_name}")
-
+        # Return best
+        best_date, best_score, best_match = max(scored_dates, key=lambda x: x[1])
         return best_date, best_score
+
+    def _parse_using_pattern(self, match: Match) -> Optional[datetime]:
+        """Use the pattern that created the match to parse it"""
+        for pattern in self.pattern_registry.patterns.get("date", []):
+            if pattern.name == match.pattern_name and pattern.parse_groups:
+                return pattern.parse_date(match.value)
+        return None

@@ -1,7 +1,7 @@
 {
   "title": null,
-  "year": 1954,
-  "date": "1954-09-10T00:00:00",
+  "year": 1937,
+  "date": "1937-10-29T00:00:00",
   "publisher": null,
   "author": null,
   "document_type": null,
@@ -11,19 +11,19 @@
     "publisher": 0.0,
     "document_type": 0.0,
     "profession": 0.0,
-    "date": 0.98
+    "date": 1.5100000000000002
   },
-  "raw_text_preview": "\n--- Page 1 ---\nBERUFSBILD DER DAMENMANTELNAHERIN\nfür die betriebliche Ausbildung\nStaatlich anerkannt durch Erlaß des Bundesministers für Wirtschaft — II A 4 — 2803/54 vom 10.9. 1954\nAusbildungszeit: 11/2 Jahre\nArbeitsgebiet:\n\nNähen und Fertigstellen von Damenmänteln oder Kostümen von Hand\n\nund mit Maschine.\n\nPflegen und Instandhaiten der Arbeitsgeräte, Maschinen und Einrichtungen.\nFertigkeiten und Kenntnisse, die in der Ausbildungszeit zu vermitteln sind:\nNotwendige: Kennenlernen der Werk- und ...",
+  "raw_text_preview": "\n--- Page 1 ---\nBerufsausbildung in der Snduftrie\n| Sugendlichen- Ausbildung\nN für den Lehrberuf\nWerfgehilfin\nbearbeitet vom |\nKeichsinftitut für Berufsausbildung in Handel und Gewerbe\n(Deutscher Ausschuß für Zechnifches Schulmefen)\nSs Berlin\nYUm9, November 1939 als induftrieller Lehrberuf anerkannt\n. durch die\nKeichsgruppe Induftrie\nTR und die\nro) Arbeitsgemeinfchaft der Induftries und Handeldfammern\nin der Reichsmwirtfchaftsfammer |\n| (Stand vom 29, Oktober 1937)\n| Berlag von BG, Teubner in Le...",
   "processing_metadata": {
     "title_method": "none",
     "publisher_method": "none",
     "document_type_method": "none",
     "profession_method": "none",
     "date_method": "pattern",
-    "processing_time_seconds": 48.46188735961914,
-    "file_path": "pdfs/brd/brd/brd_damenmaentelnaeherin_1954_bb.pdf",
+    "processing_time_seconds": 82.10049986839294,
+    "file_path": "pdfs/30s/30s/30s_werkgehilfin_1937_pruefungsanforderungen.pdf",
     "pages_processed": "1-1",
-    "text_length": 1491,
+    "text_length": 517,
     "validation_warnings": [
       "Low confidence score for title: 0.0",
       "Low confidence score for publisher: 0.0",
