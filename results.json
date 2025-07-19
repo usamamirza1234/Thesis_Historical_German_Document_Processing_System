@@ -1,7 +1,7 @@
 {
   "title": null,
-  "year": null,
-  "date": null,
+  "year": 1954,
+  "date": "1954-09-10T00:00:00",
   "publisher": null,
   "author": null,
   "document_type": null,
@@ -10,18 +10,20 @@
     "title": 0.0,
     "publisher": 0.0,
     "document_type": 0.0,
-    "profession": 0.0
+    "profession": 0.0,
+    "date": 0.98
   },
-  "raw_text_preview": "\n--- Page 1 ---\no- I\nJndustrte-\nFach arbeiterausbildung\n. f\n· Berufsbtldungsplan\nfür den Lehrberuf\nSchokolademacher\nbearbeitet vom\nDeutschen Ausschuß für Technisches Schnlwesen E. V. (Dntsch)\nBerlin W 7\nim Auftrage der\nReichsgruppe Industrie\n« und der\nArbeitsgemeinschaft der Industrie- und Handelskammern\n. in der Reichswirtschaftskammer\n» Verlag nnd Druck von B. G. Tenbner in Leipzig nnd Berlin\nL 11073\n",
+  "raw_text_preview": "\n--- Page 1 ---\nBERUFSBILD DER DAMENMANTELNAHERIN\nfür die betriebliche Ausbildung\nStaatlich anerkannt durch Erlaß des Bundesministers für Wirtschaft — II A 4 — 2803/54 vom 10.9. 1954\nAusbildungszeit: 11/2 Jahre\nArbeitsgebiet:\n\nNähen und Fertigstellen von Damenmänteln oder Kostümen von Hand\n\nund mit Maschine.\n\nPflegen und Instandhaiten der Arbeitsgeräte, Maschinen und Einrichtungen.\nFertigkeiten und Kenntnisse, die in der Ausbildungszeit zu vermitteln sind:\nNotwendige: Kennenlernen der Werk- und ...",
   "processing_metadata": {
     "title_method": "none",
     "publisher_method": "none",
     "document_type_method": "none",
     "profession_method": "none",
-    "processing_time_seconds": 93.81524348258972,
-    "file_path": "pdfs/30s/30s/berufearchiv_5526.pdf",
+    "date_method": "pattern",
+    "processing_time_seconds": 48.46188735961914,
+    "file_path": "pdfs/brd/brd/brd_damenmaentelnaeherin_1954_bb.pdf",
     "pages_processed": "1-1",
-    "text_length": 406,
+    "text_length": 1491,
     "validation_warnings": [
       "Low confidence score for title: 0.0",
       "Low confidence score for publisher: 0.0",

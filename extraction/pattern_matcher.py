@@ -104,83 +104,62 @@ class PatternRegistry:
                 regex=r'(\d{1,2})\.(\d{1,2})\.(\d{4})',
                 confidence_weight=0.7,
                 description="Fully numeric date format: DD.MM.YYYY"
+            ),
+            Pattern(  # Example match: "vom 10.9. 1954"
+                name="vom_numeric_date_space",
+                regex=r'vom\s+(\d{1,2})\.(\d{1,2})\.\s+(\d{4})',
+                confidence_weight=0.9,
+                description="vom with numeric date and space: vom DD.MM. YYYY"
             )
-
         ]
 
         for pattern in date_patterns:
             self.register_pattern("date", pattern)
 
-    def _add_publisher_patterns(self):
-        """Add publisher extraction patterns"""
-        publisher_patterns = [
-            Pattern(
-                name="bearbeitet_vom",
-                regex=r'bearbeitet\s+vom\s*\n?\s*([^\n.]{10,80})',
-                confidence_weight=0.9,
-                description="'bearbeitet vom' publisher indicator"
-            ),
-            Pattern(
-                name="deutscher_ausschuss",
-                regex=r'(Deutscher\s+Ausschuss?\s+für\s+[^.\n]{5,40})\s*(?:\([^)]+\))?\s*[Ee]\.?[Vv]\.?',
-                confidence_weight=0.85,
-                description="German Committee organizations"
-            ),
-            Pattern(
-                name="reichsministerium",
-                regex=r'(Reichsministerium\s+für\s+[^.\n]+)',
-                confidence_weight=0.9,
-                description="Reich Ministry"
-            ),
-            Pattern(
-                name="bundesministerium",
-                regex=r'(Bundesministerium\s+für\s+[^.\n]+)',
-                confidence_weight=0.9,
-                description="Federal Ministry"
-            ),
-            Pattern(
-                name="preussisches_ministerium",
-                regex=r'(Preußisches?\s+Ministerium\s+[^.\n]+)',
-                confidence_weight=0.85,
-                description="Prussian Ministry"
-            ),
-            Pattern(
-                name="deutsche_arbeitsfront",
-                regex=r'(Deutsche\s+Arbeitsfront)',
-                confidence_weight=0.8,
-                description="German Labor Front"
-            )
-        ]
-
-        for pattern in publisher_patterns:
-            self.register_pattern("publisher", pattern)
-
-    def _add_title_patterns(self):
-        """Add title extraction patterns"""
-        title_patterns = [
-            Pattern(
-                name="berufs_eignungsanforderungen",
-                regex=r'(?:Berufs-?\s*)?([A-ZÄÖÜ][a-zäöüß]*anforderungen)\s*(?:\n.*?)?\s*(?:für|fü r)\s+([^.\n]{10,60})',
-                confidence_weight=0.9,
-                description="Professional requirements format"
-            ),
-            Pattern(
-                name="verordnung_title",
-                regex=r'(?:Verordnung|Anordnung|Gesetz|Bestimmungen|Richtlinien)\s+(?:über|für|zur|betreffend)\s+([^.\n]{20,100})',
-                confidence_weight=0.85,
-                description="Regulation/law titles"
-            ),
-            Pattern(
-                name="general_title",
-                regex=r'^([A-ZÄÖÜ][^.\n]{15,80})',
-                confidence_weight=0.6,
-                description="General title pattern"
-            )
-        ]
-
-        for pattern in title_patterns:
-            self.register_pattern("title", pattern)
-
+    # def _add_publisher_patterns(self):
+    #     """Add publisher extraction patterns"""
+    #     publisher_patterns = [
+    #         Pattern(
+    #             name="bearbeitet_vom",
+    #             regex=r'bearbeitet\s+vom\s*\n?\s*([^\n.]{10,80})',
+    #             confidence_weight=0.9,
+    #             description="'bearbeitet vom' publisher indicator"
+    #         ),
+    #         Pattern(
+    #             name="deutscher_ausschuss",
+    #             regex=r'(Deutscher\s+Ausschuss?\s+für\s+[^.\n]{5,40})\s*(?:\([^)]+\))?\s*[Ee]\.?[Vv]\.?',
+    #             confidence_weight=0.85,
+    #             description="German Committee organizations"
+    #         ),
+    #         Pattern(
+    #             name="reichsministerium",
+    #             regex=r'(Reichsministerium\s+für\s+[^.\n]+)',
+    #             confidence_weight=0.9,
+    #             description="Reich Ministry"
+    #         ),
+    #         Pattern(
+    #             name="bundesministerium",
+    #             regex=r'(Bundesministerium\s+für\s+[^.\n]+)',
+    #             confidence_weight=0.9,
+    #             description="Federal Ministry"
+    #         ),
+    #         Pattern(
+    #             name="preussisches_ministerium",
+    #             regex=r'(Preußisches?\s+Ministerium\s+[^.\n]+)',
+    #             confidence_weight=0.85,
+    #             description="Prussian Ministry"
+    #         ),
+    #         Pattern(
+    #             name="deutsche_arbeitsfront",
+    #             regex=r'(Deutsche\s+Arbeitsfront)',
+    #             confidence_weight=0.8,
+    #             description="German Labor Front"
+    #         )
+    #     ]
+    #
+    #     for pattern in publisher_patterns:
+    #         self.register_pattern("publisher", pattern)
+    #
     # def _add_title_patterns(self):
     #     """Add title extraction patterns"""
     #     title_patterns = [
@@ -198,90 +177,90 @@ class PatternRegistry:
     #         ),
     #         Pattern(
     #             name="general_title",
-    #             regex=r'^([A-ZÄÖÜ][^.\n]{15,80}),
-    #         confidence_weight = 0.6,
-    #     description = "General title pattern"
-    #     )
+    #             regex=r'^([A-ZÄÖÜ][^.\n]{15,80})',
+    #             confidence_weight=0.6,
+    #             description="General title pattern"
+    #         )
     #     ]
     #
     #     for pattern in title_patterns:
     #         self.register_pattern("title", pattern)
-
-    def _add_document_type_patterns(self):
-        """Add document type patterns"""
-        doc_type_patterns = [
-            Pattern(
-                name="eignungsanforderungen",
-                regex=r'[Ee]ignungsanforderungen|Berufs-?[Ee]ignungsanforderungen',
-                confidence_weight=0.9,
-                description="Professional aptitude requirements"
-            ),
-            Pattern(
-                name="pruefungsordnung",
-                regex=r'\bPrüfungsordnung\b|\bPrüfungsanforderungen\b',
-                confidence_weight=0.9,
-                description="Examination regulations"
-            ),
-            Pattern(
-                name="lehrplan",
-                regex=r'\bLehrplan\b|\bLehrpläne\b',
-                confidence_weight=0.85,
-                description="Curriculum/teaching plan"
-            ),
-            Pattern(
-                name="ausbildungsordnung",
-                regex=r'\bAusbildungsordnung\b',
-                confidence_weight=0.9,
-                description="Training regulations"
-            ),
-            Pattern(
-                name="verordnung",
-                regex=r'\bVerordnung\b|\bAnordnung\b',
-                confidence_weight=0.8,
-                description="Regulation/decree"
-            )
-        ]
-
-        for pattern in doc_type_patterns:
-            self.register_pattern("document_type", pattern)
-
-    def _add_profession_patterns(self):
-        """Add profession extraction patterns"""
-        profession_patterns = [
-            Pattern(
-                name="suffix_fasser",
-                regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}fasser)',
-                confidence_weight=0.8,
-                description="Professions ending in 'fasser'"
-            ),
-            Pattern(
-                name="suffix_macher",
-                regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}macher)',
-                confidence_weight=0.8,
-                description="Professions ending in 'macher'"
-            ),
-            Pattern(
-                name="suffix_schmidt",
-                regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}schmidt)',
-                confidence_weight=0.8,
-                description="Professions ending in 'schmidt'"
-            ),
-            Pattern(
-                name="suffix_bauer",
-                regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}bauer)',
-                confidence_weight=0.8,
-                description="Professions ending in 'bauer'"
-            ),
-            Pattern(
-                name="common_professions",
-                regex=r'(Kaufmann|Mechaniker|Elektriker|Bäcker|Schneider|Tischler)',
-                confidence_weight=0.9,
-                description="Common profession names"
-            )
-        ]
-
-        for pattern in profession_patterns:
-            self.register_pattern("profession", pattern)
+    #
+    # def _add_document_type_patterns(self):
+    #     """Add document type patterns"""
+    #     doc_type_patterns = [
+    #         Pattern(
+    #             name="eignungsanforderungen",
+    #             regex=r'[Ee]ignungsanforderungen|Berufs-?[Ee]ignungsanforderungen',
+    #             confidence_weight=0.9,
+    #             description="Professional aptitude requirements"
+    #         ),
+    #         Pattern(
+    #             name="pruefungsordnung",
+    #             regex=r'\bPrüfungsordnung\b|\bPrüfungsanforderungen\b',
+    #             confidence_weight=0.9,
+    #             description="Examination regulations"
+    #         ),
+    #         Pattern(
+    #             name="lehrplan",
+    #             regex=r'\bLehrplan\b|\bLehrpläne\b',
+    #             confidence_weight=0.85,
+    #             description="Curriculum/teaching plan"
+    #         ),
+    #         Pattern(
+    #             name="ausbildungsordnung",
+    #             regex=r'\bAusbildungsordnung\b',
+    #             confidence_weight=0.9,
+    #             description="Training regulations"
+    #         ),
+    #         Pattern(
+    #             name="verordnung",
+    #             regex=r'\bVerordnung\b|\bAnordnung\b',
+    #             confidence_weight=0.8,
+    #             description="Regulation/decree"
+    #         )
+    #     ]
+    #
+    #     for pattern in doc_type_patterns:
+    #         self.register_pattern("document_type", pattern)
+    #
+    # def _add_profession_patterns(self):
+    #     """Add profession extraction patterns"""
+    #     profession_patterns = [
+    #         Pattern(
+    #             name="suffix_fasser",
+    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}fasser)',
+    #             confidence_weight=0.8,
+    #             description="Professions ending in 'fasser'"
+    #         ),
+    #         Pattern(
+    #             name="suffix_macher",
+    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}macher)',
+    #             confidence_weight=0.8,
+    #             description="Professions ending in 'macher'"
+    #         ),
+    #         Pattern(
+    #             name="suffix_schmidt",
+    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}schmidt)',
+    #             confidence_weight=0.8,
+    #             description="Professions ending in 'schmidt'"
+    #         ),
+    #         Pattern(
+    #             name="suffix_bauer",
+    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}bauer)',
+    #             confidence_weight=0.8,
+    #             description="Professions ending in 'bauer'"
+    #         ),
+    #         Pattern(
+    #             name="common_professions",
+    #             regex=r'(Kaufmann|Mechaniker|Elektriker|Bäcker|Schneider|Tischler)',
+    #             confidence_weight=0.9,
+    #             description="Common profession names"
+    #         )
+    #     ]
+    #
+    #     for pattern in profession_patterns:
+    #         self.register_pattern("profession", pattern)
 
     def register_pattern(self, field: str, pattern: Pattern):
         """Register a pattern for a specific field"""
@@ -343,20 +322,35 @@ class GermanDateParser:
     def parse_date_from_match(self, match: Match) -> Optional[datetime]:
         """Parse a datetime from a date match"""
         try:
-            # Extract date components from the match
-            regex_match = re.search(r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})', match.value)
-            if not regex_match:
-                return None
-
-            day_str, month_str, year_str = regex_match.groups()
-
-            day = int(day_str)
-            year = int(year_str)
-            month_normalized = month_str.lower().strip()
-
-            if month_normalized in self.german_months:
-                month = self.german_months[month_normalized]
+            # Try numeric date with space first (DD.MM. YYYY)
+            numeric_space_match = re.search(r'(\d{1,2})\.(\d{1,2})\.\s+(\d{4})', match.value)
+            if numeric_space_match:
+                day_str, month_str, year_str = numeric_space_match.groups()
+                day = int(day_str)
+                month = int(month_str)
+                year = int(year_str)
                 return datetime(year, month, day)
+
+            # Try numeric date without space (DD.MM.YYYY)
+            numeric_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', match.value)
+            if numeric_match:
+                day_str, month_str, year_str = numeric_match.groups()
+                day = int(day_str)
+                month = int(month_str)
+                year = int(year_str)
+                return datetime(year, month, day)
+
+            # Then try month names (existing code)
+            regex_match = re.search(r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})', match.value)
+            if regex_match:
+                day_str, month_str, year_str = regex_match.groups()
+                day = int(day_str)
+                year = int(year_str)
+                month_normalized = month_str.lower().strip()
+
+                if month_normalized in self.german_months:
+                    month = self.german_months[month_normalized]
+                    return datetime(year, month, day)
 
             return None
 
@@ -477,6 +471,7 @@ class PatternBasedExtractor:
         scored_dates = []
         for match in date_matches:
             parsed_date = self.date_parser.parse_date_from_match(match)
+            # import pdb; pdb.set_trace()
             if parsed_date:
                 context_score = self.date_parser.score_date_context(match)
                 scored_dates.append((parsed_date, context_score, match))

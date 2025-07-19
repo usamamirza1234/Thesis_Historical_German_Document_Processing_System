@@ -22,6 +22,8 @@ class HybridExtractionEngine:
         """Extract metadata using hybrid approach"""
         logger.debug("Starting hybrid metadata extraction")
 
+        # import pdb; pdb.set_trace()
+
         # Get pattern-based results
         pattern_results = self.pattern_extractor.extract_metadata_fields(text)
 

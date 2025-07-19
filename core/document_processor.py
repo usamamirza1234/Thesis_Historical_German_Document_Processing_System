@@ -19,8 +19,6 @@ from utils.validation import MetadataValidator
 from utils.logging_setup import setup_logging
 from utils.exceptions import DocumentProcessingError, OCRError
 
-logger = logging.getLogger(__name__)
-
 
 class DocumentProcessor:
     """
@@ -61,14 +59,14 @@ class DocumentProcessor:
             self.image_processor = ImageProcessor(self.config)
 
             # OCR engine
-            base_ocr = TesseractEngine(
+            self.base_ocr = TesseractEngine(
                 language=self.config.ocr_language,
                 config=self.config.tesseract_config
             )
-            self.ocr_engine = CachedOCREngine(
-                base_ocr,
-                enable_cache=self.config.enable_caching
-            )
+            # self.ocr_engine = CachedOCREngine(
+            #     base_ocr,
+            #     enable_cache=self.config.enable_caching
+            # )
 
             # Pattern-based extractor
             self.pattern_registry = PatternRegistry()
@@ -241,7 +239,8 @@ class DocumentProcessor:
                     # Process image with this approach
                     if pipeline is None:
                         # Direct OCR approach
-                        text = self.ocr_engine.extract_text(image_path)
+                        text = self.base_ocr.extract_text(image_path)
+                        # text = self.ocr_engine.extract_text(image_path)
                         processed_image_path = image_path
                     else:
                         # Process with pipeline
@@ -266,7 +265,8 @@ class DocumentProcessor:
                         ImageHandler.save_image(processing_result.data, processed_image_path)
 
                         # Extract text using OCR
-                        text = self.ocr_engine.extract_text(processed_image_path)
+                        text = self.base_ocr.extract_text(processed_image_path)
+                        # text = self.ocr_engine.extract_text(processed_image_path)
 
                     text_length = len(text.strip())
 
@@ -429,70 +429,70 @@ class DocumentProcessor:
         confidence += date_score * 0.1
 
         return min(confidence, 1.0)
+    #
+    # def process_documents_batch(self, file_paths: List[str],
+    #                             max_workers: Optional[int] = None) -> List[ExtractedMetadata]:
+    #     """
+    #     Process multiple documents in parallel.
+    #
+    #     Args:
+    #         file_paths: List of document paths to process
+    #         max_workers: Maximum number of worker threads
+    #
+    #     Returns:
+    #         List of ExtractedMetadata objects
+    #     """
+    #     max_workers = max_workers or self.config.max_workers
+    #
+    #     self.logger.info(f"Processing {len(file_paths)} documents with {max_workers} workers")
+    #
+    #     results = []
+    #
+    #     if max_workers == 1:
+    #         # Sequential processing
+    #         for file_path in file_paths:
+    #             result = self.process_document(file_path)
+    #             results.append(result)
+    #     else:
+    #         # Parallel processing
+    #         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    #             futures = [
+    #                 executor.submit(self.process_document, file_path)
+    #                 for file_path in file_paths
+    #             ]
+    #
+    #             for future in futures:
+    #                 try:
+    #                     result = future.result()
+    #                     results.append(result)
+    #                 except Exception as e:
+    #                     self.logger.error(f"Batch processing error: {e}")
+    #                     # Add error metadata
+    #                     error_metadata = ExtractedMetadata()
+    #                     error_metadata.processing_metadata = {'error': str(e)}
+    #                     results.append(error_metadata)
+    #
+    #     self.logger.info(f"Batch processing completed: {len(results)} results")
+    #     return results
 
-    def process_documents_batch(self, file_paths: List[str],
-                                max_workers: Optional[int] = None) -> List[ExtractedMetadata]:
-        """
-        Process multiple documents in parallel.
+    # def get_processing_statistics(self) -> Dict[str, Any]:
+    #     """Get processing statistics and component information"""
+    #     stats = {
+    #         'config': {
+    #             'dpi': self.config.dpi,
+    #             'ocr_language': self.config.ocr_language,
+    #             'confidence_threshold': self.config.confidence_threshold,
+    #             'enable_caching': self.config.enable_caching
+    #         },
+    #         'ocr_engine': self.ocr_engine.get_engine_info(),
+    #         'ml_models': self.model_manager.get_model_info(),
+    #         'patterns': self.pattern_registry.get_pattern_info()
+    #     }
+    #
+    #     return stats
 
-        Args:
-            file_paths: List of document paths to process
-            max_workers: Maximum number of worker threads
-
-        Returns:
-            List of ExtractedMetadata objects
-        """
-        max_workers = max_workers or self.config.max_workers
-
-        self.logger.info(f"Processing {len(file_paths)} documents with {max_workers} workers")
-
-        results = []
-
-        if max_workers == 1:
-            # Sequential processing
-            for file_path in file_paths:
-                result = self.process_document(file_path)
-                results.append(result)
-        else:
-            # Parallel processing
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
-                    executor.submit(self.process_document, file_path)
-                    for file_path in file_paths
-                ]
-
-                for future in futures:
-                    try:
-                        result = future.result()
-                        results.append(result)
-                    except Exception as e:
-                        self.logger.error(f"Batch processing error: {e}")
-                        # Add error metadata
-                        error_metadata = ExtractedMetadata()
-                        error_metadata.processing_metadata = {'error': str(e)}
-                        results.append(error_metadata)
-
-        self.logger.info(f"Batch processing completed: {len(results)} results")
-        return results
-
-    def get_processing_statistics(self) -> Dict[str, Any]:
-        """Get processing statistics and component information"""
-        stats = {
-            'config': {
-                'dpi': self.config.dpi,
-                'ocr_language': self.config.ocr_language,
-                'confidence_threshold': self.config.confidence_threshold,
-                'enable_caching': self.config.enable_caching
-            },
-            'ocr_engine': self.ocr_engine.get_engine_info(),
-            'ml_models': self.model_manager.get_model_info(),
-            'patterns': self.pattern_registry.get_pattern_info()
-        }
-
-        return stats
-
-    def clear_cache(self) -> None:
-        """Clear all caches"""
-        if hasattr(self.ocr_engine, 'clear_cache'):
-            self.ocr_engine.clear_cache()
-        self.logger.info("Caches cleared")
+    # def clear_cache(self) -> None:
+    #     """Clear all caches"""
+    #     if hasattr(self.ocr_engine, 'clear_cache'):
+    #         self.ocr_engine.clear_cache()
+    #     self.logger.info("Caches cleared")
