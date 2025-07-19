@@ -1,5 +1,7 @@
 import os
 import time
+import cv2
+import re
 from typing import Optional, List, Dict, Any
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -125,6 +127,8 @@ class DocumentProcessor:
             if not text.strip():
                 raise DocumentProcessingError("No text could be extracted from document")
 
+            self.logger.info(f"Extracted Text: {text}")
+
             # Extract metadata using hybrid approach
             metadata = self.hybrid_engine.extract_metadata(text)
 
@@ -221,35 +225,210 @@ class DocumentProcessor:
             raise OCRError(f"PDF processing failed: {e}")
 
     def _extract_text_from_image(self, image_path: str) -> str:
-        """Extract text from image using preprocessing and OCR"""
+        """Extract text from image using multiple preprocessing approaches"""
         try:
-            # Process image
-            processing_result = self.image_processor.process_image(image_path)
+            self.logger.info(f"Starting image text extraction: {image_path}")
 
-            if not processing_result.success:
-                raise OCRError(f"Image preprocessing failed: {processing_result.error}")
+            # Create multiple preprocessing approaches to try
+            approaches = self._create_preprocessing_approaches()
 
-            # Save processed image temporarily
-            processed_image_path = os.path.join(
-                self.config.output_directory,
-                f"processed_{os.path.basename(image_path)}"
-            )
+            best_result = {"text": "", "length": 0, "approach": "none", "confidence": 0}
 
-            from utils.file_handlers import ImageHandler
-            ImageHandler.save_image(processing_result.data, processed_image_path)
+            for approach_name, pipeline in approaches:
+                try:
+                    self.logger.debug(f"Trying approach: {approach_name}")
 
-            # Extract text using OCR
-            text = self.ocr_engine.extract_text(processed_image_path)
+                    # Process image with this approach
+                    if pipeline is None:
+                        # Direct OCR approach
+                        text = self.ocr_engine.extract_text(image_path)
+                        processed_image_path = image_path
+                    else:
+                        # Process with pipeline
+                        original_image = cv2.imread(image_path)
+                        if original_image is None:
+                            self.logger.warning(f"Could not load image: {image_path}")
+                            continue
 
-            # Clean up if not in debug mode
-            if not self.config.enable_debug and os.path.exists(processed_image_path):
-                os.remove(processed_image_path)
+                        processing_result = pipeline.process(original_image, os.path.basename(image_path))
 
-            return text
+                        if not processing_result.success:
+                            self.logger.warning(f"Preprocessing failed for {approach_name}: {processing_result.error}")
+                            continue
+
+                        # Save processed image temporarily
+                        processed_image_path = os.path.join(
+                            self.config.output_directory,
+                            f"processed_{approach_name}_{os.path.basename(image_path)}"
+                        )
+
+                        from utils.file_handlers import ImageHandler
+                        ImageHandler.save_image(processing_result.data, processed_image_path)
+
+                        # Extract text using OCR
+                        text = self.ocr_engine.extract_text(processed_image_path)
+
+                    text_length = len(text.strip())
+
+                    # Calculate a simple confidence score based on text characteristics
+                    confidence = self._calculate_text_confidence(text)
+
+                    self.logger.info(f"Approach '{approach_name}': {text_length} chars, confidence: {confidence:.2f}")
+
+                    # Update best result if this is better
+                    if text_length > best_result["length"] or (
+                            text_length == best_result["length"] and confidence > best_result["confidence"]):
+                        best_result = {
+                            "text": text,
+                            "length": text_length,
+                            "approach": approach_name,
+                            "confidence": confidence
+                        }
+
+                    # Clean up temporary file if not in debug mode
+                    if processed_image_path != image_path and not self.config.enable_debug and os.path.exists(
+                            processed_image_path):
+                        os.remove(processed_image_path)
+                    elif self.config.enable_debug and processed_image_path != image_path:
+                        self.logger.debug(f"Saved debug image: {processed_image_path}")
+
+                    # Early exit if we got really good results
+                    if text_length > 200 and confidence > 0.7:
+                        self.logger.info(f"Early exit with good results from {approach_name}")
+                        break
+
+                except Exception as e:
+                    self.logger.warning(f"Approach '{approach_name}' failed: {e}")
+                    continue
+
+            if best_result["length"] > 0:
+                self.logger.info(f"Best result from '{best_result['approach']}': {best_result['length']} characters")
+                return best_result["text"]
+            else:
+                self.logger.warning("All preprocessing approaches failed to extract meaningful text")
+                return ""
 
         except Exception as e:
             self.logger.error(f"Image text extraction failed: {e}")
             raise OCRError(f"Image processing failed: {e}")
+
+    def _create_preprocessing_approaches(self):
+        """Create multiple preprocessing pipelines to try different approaches"""
+        from preprocessing.processing_steps import (
+            WhiteSpaceRemovalStep, InvertImageStep, RescaleImageStep,
+            GrayscaleStep, BinarizeImageStep, NoiseRemovalStep,
+            BorderRemovalStep, AddBordersStep
+        )
+        from preprocessing.image_processor import ProcessingPipeline
+
+        approaches = []
+
+        # Approach 1: Direct OCR (no preprocessing)
+        approaches.append(("direct", None))
+
+        # Approach 2: Minimal processing (like your working example)
+        # This worked in your debug: invert + rescale
+        minimal_steps = [
+            InvertImageStep(),
+            RescaleImageStep(scale_factor=2.5)
+        ]
+        approaches.append(("minimal", ProcessingPipeline(minimal_steps, save_intermediate=self.config.enable_debug)))
+
+        # Approach 3: Light processing
+        light_steps = [
+            RescaleImageStep(scale_factor=2.0),
+            GrayscaleStep(),
+            AddBordersStep(border_size=50)
+        ]
+        approaches.append(("light", ProcessingPipeline(light_steps, save_intermediate=self.config.enable_debug)))
+
+        # Approach 4: Your current default pipeline
+        default_steps = []
+        if self.config.enable_white_space_removal:
+            default_steps.append(WhiteSpaceRemovalStep())
+        default_steps.extend([
+            InvertImageStep(),
+            RescaleImageStep(scale_factor=2.5),
+            GrayscaleStep(),
+            NoiseRemovalStep(),
+            BorderRemovalStep(),
+            AddBordersStep()
+        ])
+        approaches.append(("default", ProcessingPipeline(default_steps, save_intermediate=self.config.enable_debug)))
+
+        # Approach 5: Enhanced processing with binarization
+        enhanced_steps = [
+            InvertImageStep(),
+            RescaleImageStep(scale_factor=3.0),
+            GrayscaleStep(),
+            BinarizeImageStep(threshold=127),
+            NoiseRemovalStep(),
+            AddBordersStep()
+        ]
+        approaches.append(("enhanced", ProcessingPipeline(enhanced_steps, save_intermediate=self.config.enable_debug)))
+
+        # Approach 6: No white space removal (preserve all content)
+        no_white_removal_steps = [
+            InvertImageStep(),
+            RescaleImageStep(scale_factor=2.5),
+            GrayscaleStep(),
+            NoiseRemovalStep(),
+            AddBordersStep()
+        ]
+        approaches.append(("no_white_removal",
+                           ProcessingPipeline(no_white_removal_steps, save_intermediate=self.config.enable_debug)))
+
+        return approaches
+
+    def _calculate_text_confidence(self, text: str) -> float:
+        """Calculate confidence score for extracted text"""
+        if not text or not text.strip():
+            return 0.0
+
+        confidence = 0.0
+
+        # Length bonus (more text usually means better extraction)
+        text_length = len(text.strip())
+        length_score = min(text_length / 500.0, 1.0)  # Normalize to 0-1
+        confidence += length_score * 0.3
+
+        # German words bonus
+        german_words = [
+            'berufs', 'eignungsanforderungen', 'für', 'den', 'eintritt', 'lehrberuf',
+            'deutschen', 'ausschuss', 'technisches', 'schulwesen', 'berlin',
+            'arbeitsfront', 'reichsgruppe', 'industrie', 'verlag', 'stand', 'vom'
+        ]
+
+        text_lower = text.lower()
+        german_matches = sum(1 for word in german_words if word in text_lower)
+        german_score = min(german_matches / 5.0, 1.0)  # Normalize
+        confidence += german_score * 0.4
+
+        # Structure bonus (proper formatting)
+        structure_indicators = [
+            '\n',  # Line breaks
+            '(',  # Parentheses
+            ')',
+            '.',  # Periods
+            ',',  # Commas
+        ]
+
+        structure_count = sum(text.count(indicator) for indicator in structure_indicators)
+        structure_score = min(structure_count / 20.0, 1.0)  # Normalize
+        confidence += structure_score * 0.2
+
+        # Date pattern bonus
+        date_patterns = [
+            r'\d{1,2}\.\s*[A-Za-z]+\s*\d{4}',  # German date format
+            r'Stand\s+vom',  # "Stand vom" pattern
+            r'\d{4}',  # Year
+        ]
+
+        date_matches = sum(1 for pattern in date_patterns if re.search(pattern, text))
+        date_score = min(date_matches / 2.0, 1.0)
+        confidence += date_score * 0.1
+
+        return min(confidence, 1.0)
 
     def process_documents_batch(self, file_paths: List[str],
                                 max_workers: Optional[int] = None) -> List[ExtractedMetadata]:
