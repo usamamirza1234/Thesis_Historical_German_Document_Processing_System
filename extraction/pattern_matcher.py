@@ -55,50 +55,57 @@ class PatternRegistry:
     def _initialize_default_patterns(self):
         """Initialize default patterns for German documents"""
         self._add_date_patterns()
-        self._add_publisher_patterns()
-        self._add_title_patterns()
-        self._add_document_type_patterns()
-        self._add_profession_patterns()
+        # self._add_publisher_patterns()
+        # self._add_title_patterns()
+        # self._add_document_type_patterns()
+        # self._add_profession_patterns()
 
     def _add_date_patterns(self):
         """Add date extraction patterns"""
         date_patterns = [
-            Pattern(
+            Pattern(  # Example match: "12. März 2023"
                 name="standard_date",
                 regex=r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.8,
                 description="Standard German date format: DD. Month YYYY"
             ),
-            Pattern(
+            Pattern( # Example match: "vom 5. Oktober 2022"
                 name="vom_date",
                 regex=r'vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.9,
                 description="Date with 'vom' prefix"
             ),
-            Pattern(
+            Pattern(  # Example match: "den 14. Juli 2021"
                 name="den_date",
                 regex=r'den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.9,
                 description="Date with 'den' prefix"
             ),
-            Pattern(
+            Pattern(  # Example match: "(Ausgestellt am 3. Mai 2020)"
                 name="parentheses_date",
                 regex=r'\(.*?(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4}).*?\)',
                 confidence_weight=0.85,
                 description="Date in parentheses"
             ),
-            Pattern(
+            Pattern(  # Example match: "Stand vom 7. Januar 2024" or "Stcmd vom 7. Januar 2024"
                 name="stand_vom_date",
                 regex=r'(?:Stand|Stcmd)\s+vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.95,
                 description="High priority: Stand vom date"
             ),
-            Pattern(
+            Pattern(  # Example match: "Berlin, den 30. November 2022"
                 name="berlin_den_date",
                 regex=r'Berlin,?\s+den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
                 confidence_weight=0.98,
                 description="Highest priority: Official Berlin signature date"
+            ),
+            Pattern( # Example match: 19.9.1961
+                name="numeric_date",
+                regex=r'(\d{1,2})\.(\d{1,2})\.(\d{4})',
+                confidence_weight=0.7,
+                description="Fully numeric date format: DD.MM.YYYY"
             )
+
         ]
 
         for pattern in date_patterns:

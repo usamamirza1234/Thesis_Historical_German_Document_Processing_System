@@ -1,0 +1,31 @@
+{
+  "title": "BERUFSBILD DER DAMENMAÄNTELNÄHERIN",
+  "year": null,
+  "date": null,
+  "publisher": null,
+  "author": null,
+  "document_type": null,
+  "profession": null,
+  "confidence_scores": {
+    "title": 0.6,
+    "publisher": 0.0,
+    "document_type": 0.0,
+    "profession": 0.0
+  },
+  "raw_text_preview": "\n--- Page 1 ---\nBERUFSBILD DER DAMENMAÄNTELNÄHERIN\nfür die betriebliche Ausbildung\nStaatlich anerkannt durch Erlaß des Bundesministers für Wirtschaft — II A 4 — 2803/54 vom 10.9. 1954\nAusbildungszeit: 11/2 Jahre\nArbeitsgebiet:\n\nNähen und Fertigstellen von Damenmänteln oder Kostümen von Hand\n\nund mit Maschine.\n\nPflegen und Instandhalten der Arbeitsgeräte, Maschinen und Einrichtungen.\nFertigkeiten und Kenntnisse, die in der Ausbildungszeit zu vermitteln sind:\nNotwendige: Kennenlernen der Werk- und...",
+  "processing_metadata": {
+    "title_method": "pattern",
+    "publisher_method": "none",
+    "document_type_method": "none",
+    "profession_method": "none",
+    "processing_time_seconds": 57.4448676109314,
+    "file_path": "pdfs/brd/brd/brd_damenmaentelnaeherin_1954_bb.pdf",
+    "pages_processed": "1-1",
+    "text_length": 1498,
+    "validation_warnings": [
+      "Low confidence score for publisher: 0.0",
+      "Low confidence score for document_type: 0.0",
+      "Low confidence score for profession: 0.0"
+    ]
+  }
+}

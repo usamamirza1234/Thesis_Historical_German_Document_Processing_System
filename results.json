@@ -1,0 +1,32 @@
+{
+  "title": null,
+  "year": null,
+  "date": null,
+  "publisher": null,
+  "author": null,
+  "document_type": null,
+  "profession": null,
+  "confidence_scores": {
+    "title": 0.0,
+    "publisher": 0.0,
+    "document_type": 0.0,
+    "profession": 0.0
+  },
+  "raw_text_preview": "\n--- Page 1 ---\no- I\nJndustrte-\nFach arbeiterausbildung\n. f\n· Berufsbtldungsplan\nfür den Lehrberuf\nSchokolademacher\nbearbeitet vom\nDeutschen Ausschuß für Technisches Schnlwesen E. V. (Dntsch)\nBerlin W 7\nim Auftrage der\nReichsgruppe Industrie\n« und der\nArbeitsgemeinschaft der Industrie- und Handelskammern\n. in der Reichswirtschaftskammer\n» Verlag nnd Druck von B. G. Tenbner in Leipzig nnd Berlin\nL 11073\n",
+  "processing_metadata": {
+    "title_method": "none",
+    "publisher_method": "none",
+    "document_type_method": "none",
+    "profession_method": "none",
+    "processing_time_seconds": 93.81524348258972,
+    "file_path": "pdfs/30s/30s/berufearchiv_5526.pdf",
+    "pages_processed": "1-1",
+    "text_length": 406,
+    "validation_warnings": [
+      "Low confidence score for title: 0.0",
+      "Low confidence score for publisher: 0.0",
+      "Low confidence score for document_type: 0.0",
+      "Low confidence score for profession: 0.0"
+    ]
+  }
+}
