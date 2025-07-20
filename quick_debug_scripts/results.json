@@ -1,0 +1,16 @@
+{
+  "title": null,
+  "year": null,
+  "date": null,
+  "publisher": null,
+  "author": null,
+  "document_type": null,
+  "profession": null,
+  "confidence_scores": {},
+  "raw_text_preview": null,
+  "processing_metadata": {
+    "error": "'dict' object has no attribute 'date'",
+    "processing_time_seconds": 478.85393595695496,
+    "file_path": "../pdfs/30s/30s/berufearchiv_5542.pdf"
+  }
+}

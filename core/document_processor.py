@@ -1,4 +1,5 @@
 import os
+import pdb
 import time
 import cv2
 import re
@@ -74,16 +75,15 @@ class DocumentProcessor:
 
             # ML-based extractor
             model_configs = getattr(self.config, 'model_configs', {})
-            self.model_manager = ModelManager(model_configs)
-            self.ml_extractor = MLBasedExtractor(self.model_manager)
+            # self.model_manager = ModelManager(model_configs)
+            # self.ml_extractor = MLBasedExtractor(self.model_manager)
 
             # Hybrid extraction engine
-            self.hybrid_engine = HybridExtractionEngine(
-                self.pattern_extractor,
-                self.ml_extractor,
-                self.config.confidence_threshold
-            )
-
+            # self.hybrid_engine = HybridExtractionEngine(
+            #     pattern_extractor = self.pattern_extractor,
+            #     confidence_threshold= self.config.confidence_threshold
+            # )
+            # self.ml_extractor,
             self.logger.info("All components initialized successfully")
 
         except Exception as e:
@@ -119,6 +119,7 @@ class DocumentProcessor:
             if not FileHandler.is_supported_file(file_path):
                 raise DocumentProcessingError(f"Unsupported file format: {file_path}")
 
+
             # Extract text from document
             text = self._extract_text_from_document(file_path, start_page, end_page)
 
@@ -128,7 +129,9 @@ class DocumentProcessor:
             self.logger.info(f"Extracted Text: {text}")
 
             # Extract metadata using hybrid approach
-            metadata = self.hybrid_engine.extract_metadata(text)
+            # metadata = self.hybrid_engine.extract_metadata(text)
+            metadata = self.pattern_extractor.extract_metadata_fields(text)
+
 
             # Validate results
             validation_result = self.validator.validate_extracted_data(metadata)
@@ -168,8 +171,10 @@ class DocumentProcessor:
         file_ext = os.path.splitext(file_path)[1].lower()
 
         if file_ext == '.pdf':
+            self.logger.info(f" {10 * " xx-xx "} '.pdf'")
             return self._extract_text_from_pdf(file_path, start_page, end_page)
         else:
+            self.logger.info(f" {10 * " xx-xx "} 'else'")
             return self._extract_text_from_image(file_path)
 
     def _extract_text_from_pdf(self, pdf_path: str,
@@ -192,7 +197,7 @@ class DocumentProcessor:
 
             for i, page in enumerate(pages):
                 page_num = start_page + i
-                self.logger.debug(f"Processing page {page_num}")
+                self.logger.info(f"Processing page {page_num}")
 
                 # Save page as temporary image
                 temp_image_path = os.path.join(
@@ -209,8 +214,8 @@ class DocumentProcessor:
                         all_text.append(f"\n--- Page {page_num} ---\n{page_text}")
 
                     # Clean up temporary file
-                    if os.path.exists(temp_image_path):
-                        os.remove(temp_image_path)
+                    # if os.path.exists(temp_image_path):
+                    #     os.remove(temp_image_path)
 
                 except Exception as e:
                     self.logger.warning(f"Failed to process page {page_num}: {e}")
@@ -226,23 +231,31 @@ class DocumentProcessor:
         """Extract text from image using multiple preprocessing approaches"""
         try:
             self.logger.info(f"Starting image text extraction: {image_path}")
-
+            preferred_approaches = self.config.default_ocr_approaches
             # Create multiple preprocessing approaches to try
             approaches = self._create_preprocessing_approaches()
 
             best_result = {"text": "", "length": 0, "approach": "none", "confidence": 0}
+            self.logger.info(f"before approaches: {approaches}")
+            if preferred_approaches:
+                approaches = [a for a in approaches if a[0] in preferred_approaches]
+
+            self.logger.info(f"after approaches: {approaches}")
 
             for approach_name, pipeline in approaches:
                 try:
-                    self.logger.debug(f"Trying approach: {approach_name}")
+                    self.logger.info(f"Trying approach: {approach_name}")
 
                     # Process image with this approach
                     if pipeline is None:
+                        self.logger.info(f" {10 * " xx-xx "} 'Direct OCR {approach_name}'")
                         # Direct OCR approach
+                        # import pdb; pdb.set_trace()
                         text = self.base_ocr.extract_text(image_path)
                         # text = self.ocr_engine.extract_text(image_path)
                         processed_image_path = image_path
                     else:
+                        self.logger.info(f" {10 * " xx-xx "} 'pipeline OCR {approach_name}'")
                         # Process with pipeline
                         original_image = cv2.imread(image_path)
                         if original_image is None:
@@ -263,10 +276,11 @@ class DocumentProcessor:
 
                         from utils.file_handlers import ImageHandler
                         ImageHandler.save_image(processing_result.data, processed_image_path)
-
+                        self.logger.info(f" {10 * " xx-xx "} 'before text '")
                         # Extract text using OCR
                         text = self.base_ocr.extract_text(processed_image_path)
                         # text = self.ocr_engine.extract_text(processed_image_path)
+                        self.logger.info(f" {10 * " xx-xx "} 'text {text}'")
 
                     text_length = len(text.strip())
 

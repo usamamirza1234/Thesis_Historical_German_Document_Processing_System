@@ -28,13 +28,14 @@ class HybridExtractionEngine:
         pattern_results = self.pattern_extractor.extract_metadata_fields(text)
 
         # Get ML-based results
-        ml_results = self.ml_extractor.extract_metadata_fields(text)
+        # ml_results = self.ml_extractor.extract_metadata_fields(text)
 
         # Combine results using confidence-based selection
-        combined_results = self._combine_results(pattern_results, ml_results)
+        # combined_results = self._combine_results(pattern_results, ml_results)
 
         # Create metadata object
-        metadata = self._create_metadata_object(combined_results, text)
+        # metadata = self._create_metadata_object(combined_results, text)
+        metadata = self._create_metadata_object(pattern_results, text)
 
         logger.debug("Hybrid extraction completed")
         return metadata

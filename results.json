@@ -1,7 +1,7 @@
 {
   "title": null,
-  "year": 1937,
-  "date": "1937-10-29T00:00:00",
+  "year": null,
+  "date": null,
   "publisher": null,
   "author": null,
   "document_type": null,
@@ -10,20 +10,18 @@
     "title": 0.0,
     "publisher": 0.0,
     "document_type": 0.0,
-    "profession": 0.0,
-    "date": 1.5100000000000002
+    "profession": 0.0
   },
-  "raw_text_preview": "\n--- Page 1 ---\nBerufsausbildung in der Snduftrie\n| Sugendlichen- Ausbildung\nN für den Lehrberuf\nWerfgehilfin\nbearbeitet vom |\nKeichsinftitut für Berufsausbildung in Handel und Gewerbe\n(Deutscher Ausschuß für Zechnifches Schulmefen)\nSs Berlin\nYUm9, November 1939 als induftrieller Lehrberuf anerkannt\n. durch die\nKeichsgruppe Induftrie\nTR und die\nro) Arbeitsgemeinfchaft der Induftries und Handeldfammern\nin der Reichsmwirtfchaftsfammer |\n| (Stand vom 29, Oktober 1937)\n| Berlag von BG, Teubner in Le...",
+  "raw_text_preview": "\n--- Page 1 ---\no- I\nJndustrte-\nFach arbeiterausbildung\n. f\n· Berufsbtldungsplan\nfür den Lehrberuf\nSchokolademacher\nbearbeitet vom\nDeutschen Ausschuß für Technisches Schnlwesen E. V. (Dntsch)\nBerlin W 7\nim Auftrage der\nReichsgruppe Industrie\n« und der\nArbeitsgemeinschaft der Industrie- und Handelskammern\n. in der Reichswirtschaftskammer\n» Verlag nnd Druck von B. G. Tenbner in Leipzig nnd Berlin\nL 11073\n",
   "processing_metadata": {
     "title_method": "none",
     "publisher_method": "none",
     "document_type_method": "none",
     "profession_method": "none",
-    "date_method": "pattern",
-    "processing_time_seconds": 82.10049986839294,
-    "file_path": "pdfs/30s/30s/30s_werkgehilfin_1937_pruefungsanforderungen.pdf",
+    "processing_time_seconds": 64.94733953475952,
+    "file_path": "pdfs/30s/30s/berufearchiv_5526.pdf",
     "pages_processed": "1-1",
-    "text_length": 517,
+    "text_length": 406,
     "validation_warnings": [
       "Low confidence score for title: 0.0",
       "Low confidence score for publisher: 0.0",

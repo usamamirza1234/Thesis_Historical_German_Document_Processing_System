@@ -7,6 +7,8 @@ from typing import Optional, Dict, Any, List
 import logging
 from PIL import Image
 import numpy as np
+
+from extraction.pattern_matcher import PatternRegistry
 from models.data_models import ProcessingResult
 from utils.exceptions import OCRError
 
@@ -22,6 +24,13 @@ logger = logging.getLogger(__name__)
 
 class GermanHistoricalTextHandler:
     """Handles German historical documents using our existing processing step classes"""
+    _pattern_registry = None
+
+    @classmethod
+    def get_pattern_registry(cls):
+        if cls._pattern_registry is None:
+            cls._pattern_registry = PatternRegistry()
+        return cls._pattern_registry
 
     @staticmethod
     def extract_text_with_german_focus(image_path: str, debug: bool = True):
@@ -56,13 +65,13 @@ class GermanHistoricalTextHandler:
             try:
                 # Use the processing step's apply method
                 processed = processing_step.apply(image)
-
+                logger.info(f" {10 * " xx-xx "} processed: {name}  {processing_step} {lang}  {config} ")
                 # Extract text
                 text = pytesseract.image_to_string(processed, lang=lang, config=config)
-
+                logger.info(f" {10 * " xx-xx "} text  {text} ")
                 # Score result using German-specific criteria
                 score = GermanHistoricalTextHandler._score_with_patterns(text, name)
-
+                logger.info(f" {10 * " xx-xx "}   {score} ")
                 if debug:
                     print(f"{name}: {len(text)} chars, score: {score:.2f}")
                     first_line = text.split('\n')[0][:80] if text else ""
@@ -95,7 +104,7 @@ class GermanHistoricalTextHandler:
 
         try:
             from extraction.pattern_matcher import PatternRegistry
-            pattern_registry = PatternRegistry()
+            pattern_registry = GermanHistoricalTextHandler.get_pattern_registry()
 
             score = 0.0
 
@@ -220,13 +229,14 @@ class TesseractEngine(OCREngine):
         """Extract text using German-focused OCR optimization with existing processing steps"""
         if not os.path.exists(image_path):
             raise OCRError(f"Image file not found: {image_path}")
-
+        logger.info(f" {10 * " xx-xx "} 'Starting German OCR extraction'")
         try:
             if self.debug:
                 logger.info(f"Starting German OCR extraction for: {image_path}")
 
             # Use the German historical text handler with our existing processing steps
             text = GermanHistoricalTextHandler.extract_text_with_german_focus(image_path, debug=self.debug)
+            logger.info(f" {10 * " xx-xx "} 'Starting German text {text}'")
 
             # Check quality of German handler result
             if text and self._is_good_german_result(text):

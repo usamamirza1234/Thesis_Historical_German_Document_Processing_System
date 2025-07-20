@@ -196,19 +196,23 @@ from config.settings import ProcessingConfig
 from core.document_processor import DocumentProcessor
 
 # Create configuration
+
 config = ProcessingConfig(
     dpi=300,
     enable_debug=True,
-    confidence_threshold=0.6,
-    output_directory="output/30s_werkgehilfin_1937_pruefungsanforderungen"
+    confidence_threshold=0.6,  # Lower threshold for German
+    output_directory="output/brd_kaufmann_für_Bürokommunikation_RLP_1991",
+    ocr_language='deu_frak',  # Make sure this is set
+    tesseract_config=""
 )
+
 
 # Initialize processor
 processor = DocumentProcessor(config)
 
 # Example: Process a single document
 try:
-    file_path = "pdfs/30s/30s/30s_werkgehilfin_1937_pruefungsanforderungen.pdf"
+    file_path = "pdfs/brd/brd/brd_kaufmann_für_Bürokommunikation_RLP_1991.pdf"
     metadata = processor.process_document(file_path=file_path,
                                           start_page=1,
                                           end_page=1)

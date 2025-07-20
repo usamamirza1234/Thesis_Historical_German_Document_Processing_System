@@ -12,6 +12,7 @@ class ProcessingConfig:
     enable_caching: bool = True
     max_workers: int = 4
     enable_debug: bool = True
+    default_ocr_approaches: List[str] = field(default_factory=lambda: ["minimal",])
 
     # OCR specific settings - THESE WERE MISSING!
     ocr_language: str = 'deu_frak'  # Primary OCR language
