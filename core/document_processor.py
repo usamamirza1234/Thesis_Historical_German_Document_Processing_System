@@ -1,139 +1,82 @@
 import os
 import time
-import cv2
-import re
-from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+from typing import Optional, List, Dict, Any, Tuple
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pdf2image import convert_from_path
 
-from config.settings import ProcessingConfig, LoggingConfig
-from preprocessing.image_processor import ImageProcessor
-from preprocessing.ocr_engine import TesseractEngine, CachedOCREngine
-from extraction.pattern_matcher import PatternBasedExtractor, PatternRegistry
-from extraction.ml_extractor import MLBasedExtractor, ModelManager
-from extraction.hybrid_engine import HybridExtractionEngine
-from models.data_models import ExtractedMetadata, ProcessingResult
-from utils.file_handlers import FileHandler
-from utils.validation import MetadataValidator
-from utils.logging_setup import setup_logging
-from utils.exceptions import DocumentProcessingError, OCRError
+from config.settings import ProcessingConfig
+from extraction.pattern_matcher import MetadataExtractor
+
+from models.data_models import ExtractedMetadata, ProcessingResult, ImageAnalysis
+from ocr.ocr_engine import SmartOCREngine
 
 
-class DocumentProcessor:
-    """
-    Main processor for historical German legal documents.
+# ===================================================================
+# MAIN DOCUMENT PROCESSOR
+# ===================================================================
 
-    Combines OCR, image preprocessing, and metadata extraction using
-    both pattern-based and machine learning approaches.
+class SmartGermanDocumentProcessor:
+    """Main processor with intelligent OCR approach selection"""
 
-    Example:
-        >>> config = ProcessingConfig()
-        >>> processor = DocumentProcessor(config)
-        >>> metadata = processor.process_document("document.pdf")
-        >>> print(metadata.date, metadata.publisher)
-    """
-
-    def __init__(self, config: ProcessingConfig,
-                 logging_config: Optional[LoggingConfig] = None):
+    def __init__(self, config: ProcessingConfig):
         self.config = config
+        self.ocr_engine = SmartOCREngine(config)
+        self.metadata_extractor = MetadataExtractor()
 
         # Setup logging
-        if logging_config:
-            self.logger = setup_logging(logging_config)
-        else:
-            self.logger = logging.getLogger(__name__)
+        self._setup_logging()
 
-        # Initialize components
-        self._initialize_components()
+        self.logger.info("Smart German Document Processor initialized")
 
-        # Initialize validator
-        self.validator = MetadataValidator(min_confidence=config.confidence_threshold)
+    def _setup_logging(self):
+        """Setup logging system"""
+        self.logger = logging.getLogger('smart_german_ocr')
+        self.logger.setLevel(logging.INFO if not self.config.enable_debug else logging.DEBUG)
 
-        self.logger.info("DocumentProcessor initialized successfully")
-
-    def _initialize_components(self):
-        """Initialize all processing components"""
-        try:
-            # Image processor
-            self.image_processor = ImageProcessor(self.config)
-
-            # OCR engine
-            self.base_ocr = TesseractEngine(
-                language=self.config.ocr_language,
-                config=self.config.tesseract_config
+        if not self.logger.handlers:
+            # Console handler
+            console_handler = logging.StreamHandler()
+            console_formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
             )
-            # self.ocr_engine = CachedOCREngine(
-            #     base_ocr,
-            #     enable_cache=self.config.enable_caching
-            # )
+            console_handler.setFormatter(console_formatter)
+            self.logger.addHandler(console_handler)
 
-            # Pattern-based extractor
-            self.pattern_registry = PatternRegistry()
-            self.pattern_extractor = PatternBasedExtractor(self.pattern_registry)
+            # File handler if enabled
+            if self.config.save_detailed_logs:
+                log_file = os.path.join(self.config.output_directory, "processing.log")
+                file_handler = logging.FileHandler(log_file, encoding='utf-8')
+                file_handler.setFormatter(console_formatter)
+                self.logger.addHandler(file_handler)
 
-            # ML-based extractor
-            model_configs = getattr(self.config, 'model_configs', {})
-            self.model_manager = ModelManager(model_configs)
-            self.ml_extractor = MLBasedExtractor(self.model_manager)
+    def process_document(self, file_path: str, start_page: int = 1,
+                         end_page: Optional[int] = None,
+                         user_approach: Optional[str] = None) -> ExtractedMetadata:
+        """Process a document with intelligent OCR"""
 
-            # Hybrid extraction engine
-            self.hybrid_engine = HybridExtractionEngine(
-                self.pattern_extractor,
-                self.ml_extractor,
-                self.config.confidence_threshold
-            )
-
-            self.logger.info("All components initialized successfully")
-
-        except Exception as e:
-            self.logger.error(f"Failed to initialize components: {e}")
-            raise DocumentProcessingError(f"Initialization failed: {e}")
-
-    def process_document(self, file_path: str,
-                         start_page: int = 1,
-                         end_page: Optional[int] = None) -> ExtractedMetadata:
-        """
-        Extract metadata from a single document.
-
-        Args:
-            file_path: Path to PDF or image file
-            start_page: First page to process (1-indexed)
-            end_page: Last page to process (None for all pages)
-
-        Returns:
-            ExtractedMetadata with confidence scores
-
-        Raises:
-            DocumentProcessingError: If processing fails
-        """
         start_time = time.time()
+        self.logger.info(f"Processing document: {file_path}")
 
         try:
-            self.logger.info(f"Processing document: {file_path}")
+            # Validate file
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
 
-            # Validate input
-            if not FileHandler.validate_file_path(file_path):
-                raise DocumentProcessingError(f"File not found or inaccessible: {file_path}")
-
-            if not FileHandler.is_supported_file(file_path):
-                raise DocumentProcessingError(f"Unsupported file format: {file_path}")
-
-            # Extract text from document
-            text = self._extract_text_from_document(file_path, start_page, end_page)
+            # Extract text
+            text, processing_info = self._extract_text_from_document(
+                file_path, start_page, end_page, user_approach
+            )
 
             if not text.strip():
-                raise DocumentProcessingError("No text could be extracted from document")
+                raise ValueError("No text could be extracted from document")
 
-            self.logger.info(f"Extracted Text: {text}")
+            self.logger.info(f"Successfully extracted {len(text)} characters")
 
-            # Extract metadata using hybrid approach
-            metadata = self.hybrid_engine.extract_metadata(text)
-
-            # Validate results
-            validation_result = self.validator.validate_extracted_data(metadata)
-            if validation_result.warnings:
-                self.logger.warning(f"Validation warnings: {validation_result.warnings}")
+            # Extract metadata
+            metadata = self.metadata_extractor.extract_metadata(text)
 
             # Add processing information
             processing_time = time.time() - start_time
@@ -142,42 +85,44 @@ class DocumentProcessor:
                 'file_path': file_path,
                 'pages_processed': f"{start_page}-{end_page or 'end'}",
                 'text_length': len(text),
-                'validation_warnings': validation_result.warnings
+                **processing_info
             })
 
-            self.logger.info(f"Successfully processed {file_path} in {processing_time:.2f}s")
+            self.logger.info(f"Processing completed in {processing_time:.2f}s")
             return metadata
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Failed to process {file_path}: {e}")
+            self.logger.error(f"Processing failed: {e}")
 
-            # Return partial metadata with error information
             error_metadata = ExtractedMetadata()
             error_metadata.processing_metadata = {
                 'error': str(e),
                 'processing_time_seconds': processing_time,
-                'file_path': file_path
+                'file_path': file_path,
+                'success': False
             }
             return error_metadata
 
-    def _extract_text_from_document(self, file_path: str,
-                                    start_page: int,
-                                    end_page: Optional[int]) -> str:
-        """Extract text from PDF or image file"""
-        file_ext = os.path.splitext(file_path)[1].lower()
+    def _extract_text_from_document(self, file_path: str, start_page: int,
+                                    end_page: Optional[int],
+                                    user_approach: Optional[str]) -> Tuple[str, Dict]:
+        """Extract text from document"""
+
+        file_ext = Path(file_path).suffix.lower()
 
         if file_ext == '.pdf':
-            return self._extract_text_from_pdf(file_path, start_page, end_page)
+            return self._extract_from_pdf(file_path, start_page, end_page, user_approach)
         else:
-            return self._extract_text_from_image(file_path)
+            return self._extract_from_image(file_path, user_approach)
 
-    def _extract_text_from_pdf(self, pdf_path: str,
-                               start_page: int,
-                               end_page: Optional[int]) -> str:
-        """Extract text from PDF using OCR"""
+    def _extract_from_pdf(self, pdf_path: str, start_page: int,
+                          end_page: Optional[int],
+                          user_approach: Optional[str]) -> Tuple[str, Dict]:
+        """Extract text from PDF"""
+
         try:
-            # Convert PDF pages to images
+            # Convert PDF to images
             pages = convert_from_path(
                 pdf_path,
                 first_page=start_page,
@@ -186,313 +131,200 @@ class DocumentProcessor:
             )
 
             if not pages:
-                raise OCRError("No pages could be converted from PDF")
+                raise ValueError("No pages could be converted from PDF")
 
             all_text = []
+            processing_info = {
+                'total_pages': len(pages),
+                'successful_pages': 0,
+                'page_results': []
+            }
 
             for i, page in enumerate(pages):
                 page_num = start_page + i
-                self.logger.debug(f"Processing page {page_num}")
+                self.logger.info(f"Processing page {page_num}")
 
-                # Save page as temporary image
+                # Save page as image
                 temp_image_path = os.path.join(
                     self.config.output_directory,
                     f"temp_page_{page_num}.png"
                 )
-                FileHandler.ensure_directory(os.path.dirname(temp_image_path))
+                os.makedirs(os.path.dirname(temp_image_path), exist_ok=True)
                 page.save(temp_image_path)
 
                 try:
                     # Extract text from page
-                    page_text = self._extract_text_from_image(temp_image_path)
+                    page_text, page_info = self._extract_from_image(
+                        temp_image_path, user_approach
+                    )
+
                     if page_text.strip():
                         all_text.append(f"\n--- Page {page_num} ---\n{page_text}")
+                        processing_info['successful_pages'] += 1
 
-                    # Clean up temporary file
-                    if os.path.exists(temp_image_path):
+                    page_info['page_number'] = page_num
+                    processing_info['page_results'].append(page_info)
+
+                    # Clean up unless debug mode
+                    if not self.config.enable_debug:
                         os.remove(temp_image_path)
 
                 except Exception as e:
                     self.logger.warning(f"Failed to process page {page_num}: {e}")
-                    continue
+                    processing_info['page_results'].append({
+                        'page_number': page_num,
+                        'error': str(e),
+                        'success': False
+                    })
 
-            return "\n".join(all_text)
-
-        except Exception as e:
-            self.logger.error(f"PDF text extraction failed: {e}")
-            raise OCRError(f"PDF processing failed: {e}")
-
-    def _extract_text_from_image(self, image_path: str) -> str:
-        """Extract text from image using multiple preprocessing approaches"""
-        try:
-            self.logger.info(f"Starting image text extraction: {image_path}")
-
-            # Create multiple preprocessing approaches to try
-            approaches = self._create_preprocessing_approaches()
-
-            best_result = {"text": "", "length": 0, "approach": "none", "confidence": 0}
-
-            for approach_name, pipeline in approaches:
-                try:
-                    self.logger.debug(f"Trying approach: {approach_name}")
-
-                    # Process image with this approach
-                    if pipeline is None:
-                        # Direct OCR approach
-                        text = self.base_ocr.extract_text(image_path)
-                        # text = self.ocr_engine.extract_text(image_path)
-                        processed_image_path = image_path
-                    else:
-                        # Process with pipeline
-                        original_image = cv2.imread(image_path)
-                        if original_image is None:
-                            self.logger.warning(f"Could not load image: {image_path}")
-                            continue
-
-                        processing_result = pipeline.process(original_image, os.path.basename(image_path))
-
-                        if not processing_result.success:
-                            self.logger.warning(f"Preprocessing failed for {approach_name}: {processing_result.error}")
-                            continue
-
-                        # Save processed image temporarily
-                        processed_image_path = os.path.join(
-                            self.config.output_directory,
-                            f"processed_{approach_name}_{os.path.basename(image_path)}"
-                        )
-
-                        from utils.file_handlers import ImageHandler
-                        ImageHandler.save_image(processing_result.data, processed_image_path)
-
-                        # Extract text using OCR
-                        text = self.base_ocr.extract_text(processed_image_path)
-                        # text = self.ocr_engine.extract_text(processed_image_path)
-
-                    text_length = len(text.strip())
-
-                    # Calculate a simple confidence score based on text characteristics
-                    confidence = self._calculate_text_confidence(text)
-
-                    self.logger.info(f"Approach '{approach_name}': {text_length} chars, confidence: {confidence:.2f}")
-
-                    # Update best result if this is better
-                    if text_length > best_result["length"] or (
-                            text_length == best_result["length"] and confidence > best_result["confidence"]):
-                        best_result = {
-                            "text": text,
-                            "length": text_length,
-                            "approach": approach_name,
-                            "confidence": confidence
-                        }
-
-                    # Clean up temporary file if not in debug mode
-                    if processed_image_path != image_path and not self.config.enable_debug and os.path.exists(
-                            processed_image_path):
-                        os.remove(processed_image_path)
-                    elif self.config.enable_debug and processed_image_path != image_path:
-                        self.logger.debug(f"Saved debug image: {processed_image_path}")
-
-                    # Early exit if we got really good results
-                    if text_length > 200 and confidence > 0.7:
-                        self.logger.info(f"Early exit with good results from {approach_name}")
-                        break
-
-                except Exception as e:
-                    self.logger.warning(f"Approach '{approach_name}' failed: {e}")
-                    continue
-
-            if best_result["length"] > 0:
-                self.logger.info(f"Best result from '{best_result['approach']}': {best_result['length']} characters")
-                return best_result["text"]
-            else:
-                self.logger.warning("All preprocessing approaches failed to extract meaningful text")
-                return ""
+            return "\n".join(all_text), processing_info
 
         except Exception as e:
-            self.logger.error(f"Image text extraction failed: {e}")
-            raise OCRError(f"Image processing failed: {e}")
+            raise ValueError(f"PDF processing failed: {e}")
 
-    def _create_preprocessing_approaches(self):
-        """Create multiple preprocessing pipelines to try different approaches"""
-        from preprocessing.processing_steps import (
-            WhiteSpaceRemovalStep, InvertImageStep, RescaleImageStep,
-            GrayscaleStep, BinarizeImageStep, NoiseRemovalStep,
-            BorderRemovalStep, AddBordersStep
+    def _extract_from_image(self, image_path: str,
+                            user_approach: Optional[str]) -> Tuple[str, Dict]:
+        """Extract text from image using smart OCR"""
+
+        # Get user choice if interactive mode is enabled
+        if self.config.enable_interactive_mode and not user_approach:
+            # First analyze the image
+            analysis = self.ocr_engine.analyzer.analyze_image(image_path)
+            user_choice = show_analysis_and_get_choice(analysis)
+        else:
+            user_choice = user_approach
+
+        # Extract text using smart engine
+        text, attempts, analysis = self.ocr_engine.extract_text_smart(
+            image_path, user_choice
         )
-        from preprocessing.image_processor import ProcessingPipeline
 
-        approaches = []
+        # Prepare processing info
+        processing_info = {
+            'analysis': {
+                'document_type': analysis.document_type.value,
+                'confidence': analysis.confidence,
+                'image_quality': analysis.image_quality.value,
+                'brightness': analysis.brightness,
+                'contrast': analysis.contrast,
+                'has_inverted_text': analysis.has_inverted_text,
+                'reasoning': analysis.reasoning
+            },
+            'ocr_attempts': len(attempts),
+            'successful_attempts': sum(1 for a in attempts if a.success),
+            'user_choice': user_choice,
+            'successful_approach': None,
+            'final_confidence': 0.0
+        }
 
-        # Approach 1: Direct OCR (no preprocessing)
-        approaches.append(("direct", None))
+        # Find best attempt
+        successful_attempts = [a for a in attempts if a.success]
+        if successful_attempts:
+            best_attempt = max(successful_attempts, key=lambda a: a.confidence)
+            processing_info['successful_approach'] = best_attempt.approach_name
+            processing_info['final_confidence'] = best_attempt.confidence
 
-        # Approach 2: Minimal processing (like your working example)
-        # This worked in your debug: invert + rescale
-        minimal_steps = [
-            InvertImageStep(),
-            RescaleImageStep(scale_factor=2.5)
-        ]
-        approaches.append(("minimal", ProcessingPipeline(minimal_steps, save_intermediate=self.config.enable_debug)))
+        return text, processing_info
 
-        # Approach 3: Light processing
-        light_steps = [
-            RescaleImageStep(scale_factor=2.0),
-            GrayscaleStep(),
-            AddBordersStep(border_size=50)
-        ]
-        approaches.append(("light", ProcessingPipeline(light_steps, save_intermediate=self.config.enable_debug)))
+    def process_batch(self, file_paths: List[str], **kwargs) -> List[ExtractedMetadata]:
+        """Process multiple documents"""
+        results = []
 
-        # Approach 4: Your current default pipeline
-        default_steps = []
-        if self.config.enable_white_space_removal:
-            default_steps.append(WhiteSpaceRemovalStep())
-        default_steps.extend([
-            InvertImageStep(),
-            RescaleImageStep(scale_factor=2.5),
-            GrayscaleStep(),
-            NoiseRemovalStep(),
-            BorderRemovalStep(),
-            AddBordersStep()
-        ])
-        approaches.append(("default", ProcessingPipeline(default_steps, save_intermediate=self.config.enable_debug)))
+        self.logger.info(f"Starting batch processing of {len(file_paths)} documents")
 
-        # Approach 5: Enhanced processing with binarization
-        enhanced_steps = [
-            InvertImageStep(),
-            RescaleImageStep(scale_factor=3.0),
-            GrayscaleStep(),
-            BinarizeImageStep(threshold=127),
-            NoiseRemovalStep(),
-            AddBordersStep()
-        ]
-        approaches.append(("enhanced", ProcessingPipeline(enhanced_steps, save_intermediate=self.config.enable_debug)))
+        if self.config.enable_parallel_processing and len(file_paths) > 1:
+            # Parallel processing
+            with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
+                futures = [
+                    executor.submit(self.process_document, file_path, **kwargs)
+                    for file_path in file_paths
+                ]
 
-        # Approach 6: No white space removal (preserve all content)
-        no_white_removal_steps = [
-            InvertImageStep(),
-            RescaleImageStep(scale_factor=2.5),
-            GrayscaleStep(),
-            NoiseRemovalStep(),
-            AddBordersStep()
-        ]
-        approaches.append(("no_white_removal",
-                           ProcessingPipeline(no_white_removal_steps, save_intermediate=self.config.enable_debug)))
+                for future in futures:
+                    try:
+                        result = future.result(timeout=self.config.processing_timeout_seconds)
+                        results.append(result)
+                    except Exception as e:
+                        self.logger.error(f"Batch processing error: {e}")
+                        error_metadata = ExtractedMetadata()
+                        error_metadata.processing_metadata = {'error': str(e)}
+                        results.append(error_metadata)
+        else:
+            # Sequential processing
+            for file_path in file_paths:
+                try:
+                    result = self.process_document(file_path, **kwargs)
+                    results.append(result)
+                except Exception as e:
+                    self.logger.error(f"Error processing {file_path}: {e}")
+                    error_metadata = ExtractedMetadata()
+                    error_metadata.processing_metadata = {'error': str(e)}
+                    results.append(error_metadata)
 
-        return approaches
+        self.logger.info(f"Batch processing completed: {len(results)} results")
+        return results
 
-    def _calculate_text_confidence(self, text: str) -> float:
-        """Calculate confidence score for extracted text"""
-        if not text or not text.strip():
-            return 0.0
 
-        confidence = 0.0
 
-        # Length bonus (more text usually means better extraction)
-        text_length = len(text.strip())
-        length_score = min(text_length / 500.0, 1.0)  # Normalize to 0-1
-        confidence += length_score * 0.3
+# ===================================================================
+# USER INTERACTION SYSTEM
+# ===================================================================
 
-        # German words bonus
-        german_words = [
-            'berufs', 'eignungsanforderungen', 'für', 'den', 'eintritt', 'lehrberuf',
-            'deutschen', 'ausschuss', 'technisches', 'schulwesen', 'berlin',
-            'arbeitsfront', 'reichsgruppe', 'industrie', 'verlag', 'stand', 'vom'
-        ]
+def show_analysis_and_get_choice(analysis: ImageAnalysis, max_display: int = 5) -> Optional[str]:
+    """Show analysis results and get user choice"""
 
-        text_lower = text.lower()
-        german_matches = sum(1 for word in german_words if word in text_lower)
-        german_score = min(german_matches / 5.0, 1.0)  # Normalize
-        confidence += german_score * 0.4
+    print(f"\n🔍 Smart Image Analysis Results:")
+    print("=" * 50)
+    print(f"📄 Document Type: {analysis.document_type.value.replace('_', ' ').title()}")
+    print(f"⭐ Detection Confidence: {analysis.confidence:.2f}")
+    print(f"🖼️  Image Quality: {analysis.image_quality.value.title()}")
+    print(f"💡 Brightness: {analysis.brightness:.0f}/255")
+    print(f"🌗 Contrast: {analysis.contrast:.1f}")
+    print(f"📏 Resolution: {analysis.resolution[0]}x{analysis.resolution[1]}")
+    print(f"📊 Text Density: {analysis.text_density:.2f}")
+    print(f"📏 Estimated Text Size: {analysis.estimated_text_size}")
 
-        # Structure bonus (proper formatting)
-        structure_indicators = [
-            '\n',  # Line breaks
-            '(',  # Parentheses
-            ')',
-            '.',  # Periods
-            ',',  # Commas
-        ]
+    if analysis.has_inverted_text:
+        print("⚫ Inverted text detected (white text on dark background)")
 
-        structure_count = sum(text.count(indicator) for indicator in structure_indicators)
-        structure_score = min(structure_count / 20.0, 1.0)  # Normalize
-        confidence += structure_score * 0.2
+    print(f"\n🧠 AI Analysis Reasoning:")
+    for i, reason in enumerate(analysis.reasoning, 1):
+        print(f"   {i}. {reason}")
 
-        # Date pattern bonus
-        date_patterns = [
-            r'\d{1,2}\.\s*[A-Za-z]+\s*\d{4}',  # German date format
-            r'Stand\s+vom',  # "Stand vom" pattern
-            r'\d{4}',  # Year
-        ]
+    print(f"\n🚀 Recommended OCR Approaches (in priority order):")
+    displayed_approaches = analysis.recommended_approaches[:max_display]
 
-        date_matches = sum(1 for pattern in date_patterns if re.search(pattern, text))
-        date_score = min(date_matches / 2.0, 1.0)
-        confidence += date_score * 0.1
+    for i, approach in enumerate(displayed_approaches, 1):
+        print(f"   {i}. {approach.replace('_', ' ').title()}")
 
-        return min(confidence, 1.0)
-    #
-    # def process_documents_batch(self, file_paths: List[str],
-    #                             max_workers: Optional[int] = None) -> List[ExtractedMetadata]:
-    #     """
-    #     Process multiple documents in parallel.
-    #
-    #     Args:
-    #         file_paths: List of document paths to process
-    #         max_workers: Maximum number of worker threads
-    #
-    #     Returns:
-    #         List of ExtractedMetadata objects
-    #     """
-    #     max_workers = max_workers or self.config.max_workers
-    #
-    #     self.logger.info(f"Processing {len(file_paths)} documents with {max_workers} workers")
-    #
-    #     results = []
-    #
-    #     if max_workers == 1:
-    #         # Sequential processing
-    #         for file_path in file_paths:
-    #             result = self.process_document(file_path)
-    #             results.append(result)
-    #     else:
-    #         # Parallel processing
-    #         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    #             futures = [
-    #                 executor.submit(self.process_document, file_path)
-    #                 for file_path in file_paths
-    #             ]
-    #
-    #             for future in futures:
-    #                 try:
-    #                     result = future.result()
-    #                     results.append(result)
-    #                 except Exception as e:
-    #                     self.logger.error(f"Batch processing error: {e}")
-    #                     # Add error metadata
-    #                     error_metadata = ExtractedMetadata()
-    #                     error_metadata.processing_metadata = {'error': str(e)}
-    #                     results.append(error_metadata)
-    #
-    #     self.logger.info(f"Batch processing completed: {len(results)} results")
-    #     return results
+    print(f"\n⚡ Your Options:")
+    print(f"   0. Use AI recommendation (auto-select best approach)")
+    print(f"   1-{len(displayed_approaches)}. Choose specific approach")
+    print(f"   a. Try all recommended approaches")
+    print(f"   s. Skip analysis and use standard processing")
 
-    # def get_processing_statistics(self) -> Dict[str, Any]:
-    #     """Get processing statistics and component information"""
-    #     stats = {
-    #         'config': {
-    #             'dpi': self.config.dpi,
-    #             'ocr_language': self.config.ocr_language,
-    #             'confidence_threshold': self.config.confidence_threshold,
-    #             'enable_caching': self.config.enable_caching
-    #         },
-    #         'ocr_engine': self.ocr_engine.get_engine_info(),
-    #         'ml_models': self.model_manager.get_model_info(),
-    #         'patterns': self.pattern_registry.get_pattern_info()
-    #     }
-    #
-    #     return stats
+    while True:
+        try:
+            choice = input(f"\n👤 Your choice (0-{len(displayed_approaches)}, a, s): ").strip().lower()
 
-    # def clear_cache(self) -> None:
-    #     """Clear all caches"""
-    #     if hasattr(self.ocr_engine, 'clear_cache'):
-    #         self.ocr_engine.clear_cache()
-    #     self.logger.info("Caches cleared")
+            if choice == '0' or choice == '':
+                return None  # Use AI recommendation
+            elif choice == 'a':
+                return "all_recommended"
+            elif choice == 's':
+                return "skip_analysis"
+            elif choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(displayed_approaches):
+                    return displayed_approaches[index]
+                else:
+                    print(f"❌ Please enter a number between 1 and {len(displayed_approaches)}")
+            else:
+                print("❌ Please enter a valid option (0, 1-5, a, or s)")
+
+        except KeyboardInterrupt:
+            print("\n👋 Cancelled by user")
+            return None
+        except Exception as e:
+            print(f"❌ Error: {e}")
+

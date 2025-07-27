@@ -1,39 +1,85 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import os
-
+# ===================================================================
+# CONFIGURATION SYSTEM
+# ===================================================================
 
 @dataclass
 class ProcessingConfig:
-    """Configuration for document processing pipeline"""
+    """Complete configuration for the processing system"""
+
+    # Basic settings
     dpi: int = 300
     confidence_threshold: float = 0.7
-    output_directory: str = "output_dir"
-    enable_caching: bool = True
+    output_directory: str = "output_smart_ocr"
+    enable_debug: bool = False
+
+    # OCR settings
+    ocr_language: str = 'deu'
+    tesseract_config: str = ""
+    fallback_languages: List[str] = field(default_factory=lambda: ['deu', 'deu_frak'])
+
+    # Smart processing settings
+    enable_smart_analysis: bool = True
+    enable_interactive_mode: bool = True
+    auto_select_best_approach: bool = True
+    max_approaches_to_try: int = 6
+    early_exit_confidence: float = 0.8
+    early_exit_min_length: int = 100
+
+    # Approach preferences
+    preferred_approaches: List[str] = field(default_factory=list)
+    excluded_approaches: List[str] = field(default_factory=list)
+
+    # Performance settings
+    processing_timeout_seconds: int = 300
+    enable_parallel_processing: bool = False
     max_workers: int = 4
-    enable_debug: bool = True
 
-    # OCR specific settings - THESE WERE MISSING!
-    ocr_language: str = 'deu_frak'  # Primary OCR language
-    tesseract_config: str = ""  # Tesseract configuration string
+    # Output settings
+    save_intermediate_images: bool = False
+    save_analysis_results: bool = True
+    save_detailed_logs: bool = True
 
-    # Image processing settings
-    enable_white_space_removal: bool = True
-    image_scale_factor: float = 2.5
-    white_threshold: int = 240
-    min_content_area: int = 1000
+    def __post_init__(self):
+        """Validate and setup configuration"""
+        os.makedirs(self.output_directory, exist_ok=True)
+        self.confidence_threshold = max(0.0, min(1.0, self.confidence_threshold))
 
-    # Pattern matching settings
-    fuzzy_match_threshold: float = 0.8
-    date_confidence_bonus: float = 0.9
+        if self.enable_debug:
+            self.save_intermediate_images = True
+            self.save_analysis_results = True
 
-    # Model configurations (for ML components)
-    model_configs: Dict = field(default_factory=dict)
+    @classmethod
+    def for_fraktur_documents(cls, output_dir: str = "output_fraktur") -> 'ProcessingConfig':
+        """Configuration optimized for Fraktur documents"""
+        return cls(
+            ocr_language='deu_frak',
+            preferred_approaches=["fraktur_traditional", "fraktur_enhanced", "mixed_period"],
+            confidence_threshold=0.6,
+            output_directory=output_dir,
+            enable_debug=True
+        )
 
+    @classmethod
+    def for_modern_documents(cls, output_dir: str = "output_modern") -> 'ProcessingConfig':
+        """Configuration optimized for modern documents"""
+        return cls(
+            ocr_language='deu',
+            preferred_approaches=["modern_german", "official_document", "light"],
+            confidence_threshold=0.75,
+            output_directory=output_dir
+        )
 
-@dataclass
-class LoggingConfig:
-    """Logging configuration"""
-    level: str = "INFO"
-    format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    file_path: Optional[str] = None
+    @classmethod
+    def for_quick_processing(cls, output_dir: str = "output_quick") -> 'ProcessingConfig':
+        """Configuration for quick processing"""
+        return cls(
+            enable_interactive_mode=False,
+            max_approaches_to_try=3,
+            preferred_approaches=["modern_german", "light", "direct"],
+            confidence_threshold=0.65,
+            output_directory=output_dir,
+            enable_debug=False
+        )

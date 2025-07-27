@@ -1,395 +1,224 @@
-import re
-from typing import List, Dict, Tuple, Optional
+# ===================================================================
+# PATTERN MATCHING SYSTEM
+# ===================================================================
+import logging
 from dataclasses import dataclass
 from datetime import datetime
-import logging
-from models.data_models import Match
-from utils.exceptions import PatternMatchingError
-
-logger = logging.getLogger(__name__)
+from typing import Tuple, Optional, Dict, List
+import re
+from models.data_models import Match, ExtractedMetadata
 
 
 @dataclass
 class Pattern:
-    """Represents a regex pattern for metadata extraction"""
+    """Pattern for metadata extraction"""
     name: str
     regex: str
-    confidence_weight: float
+    confidence: float
     description: str
-    flags: int = re.IGNORECASE | re.MULTILINE
-    parse_groups: tuple = None  # (day_group, month_group, year_group)
+    field_type: str
+    parse_groups: Optional[Tuple[int, ...]] = None
 
-    def find_matches(self, text: str) -> List[Match]:
-        """Find all matches of this pattern in text"""
-        try:
-            matches = []
-            for match in re.finditer(self.regex, text, self.flags):
-                # Get context around match
-                start_context = max(0, match.start() - 100)
-                end_context = min(len(text), match.end() + 100)
-                context = text[start_context:end_context]
-
-                match_obj = Match(
-                    value=match.group(0),
-                    confidence=self.confidence_weight,
-                    start_pos=match.start(),
-                    end_pos=match.end(),
-                    pattern_name=self.name,
-                    context=context
-                )
-                matches.append(match_obj)
-
-            return matches
-
-        except re.error as e:
-            logger.error(f"Regex error in pattern {self.name}: {e}")
-            return []
-
-    def parse_date(self, match_value: str) -> Optional[datetime]:
-        """Parse date from this pattern's match"""
-        german_months = {
-            'januar': 1, 'februar': 2, 'märz': 3, 'april': 4, 'mai': 5,
-            'juni': 6, 'juli': 7, 'august': 8, 'september': 9,
-            'oktober': 10, 'november': 11, 'dezember': 12
-        }
-        match = re.search(self.regex, match_value)
-        if not match or not self.parse_groups:
-            return None
-
-        try:
-            day_group, month_group, year_group = self.parse_groups
-            day = int(match.group(day_group))
-            year = int(match.group(year_group))
-
-            # Handle month (number or name)
-            month_str = match.group(month_group)
-            if month_str.isdigit():
-                month = int(month_str)
-            else:
-                # Use German month names dictionary
-                month = german_months.get(month_str.lower(), None)
-                if not month:
-                    return None
-
-            return datetime(year, month, day)
-        except:
-            return None
 
 class PatternRegistry:
-    """Registry for managing extraction patterns"""
+    """Registry for extraction patterns"""
 
     def __init__(self):
         self.patterns: Dict[str, List[Pattern]] = {}
-        self._initialize_default_patterns()
+        self._initialize_patterns()
 
-    def _initialize_default_patterns(self):
-        """Initialize default patterns for German documents"""
-        self._add_date_patterns()
-        # self._add_publisher_patterns()
-        # self._add_title_patterns()
-        # self._add_document_type_patterns()
-        # self._add_profession_patterns()
+    def _initialize_patterns(self):
+        """Initialize German document patterns"""
 
-    def _add_date_patterns(self):
-        """Add date extraction patterns"""
-        date_patterns = [
-            Pattern(  # Example match: "12. März 2023"
+        # Date patterns
+        self.patterns["date"] = [
+            Pattern(
                 name="standard_date",
                 regex=r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
-                confidence_weight=0.8,
-                description="Standard German date format: DD. Month YYYY",
-                parse_groups=(1, 2, 3),
+                confidence=0.8,
+                description="Standard German date: DD. Month YYYY",
+                field_type="date",
+                parse_groups=(1, 2, 3)
             ),
-            Pattern( # Example match: "vom 5. Oktober 2022"
+            Pattern(
                 name="vom_date",
                 regex=r'vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
-                confidence_weight=0.9,
+                confidence=0.9,
                 description="Date with 'vom' prefix",
-                parse_groups=(1, 2, 3),
+                field_type="date",
+                parse_groups=(1, 2, 3)
             ),
-            Pattern(  # Example match: "den 14. Juli 2021"
-                name="den_date",
-                regex=r'den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
-                confidence_weight=0.9,
-                description="Date with 'den' prefix",
-                parse_groups=(1, 2, 3),
-            ),
-            Pattern(  # Example match: "(Ausgestellt am 3. Mai 2020)"
-                name="parentheses_date",
-                regex=r'\(.*?(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4}).*?\)',
-                confidence_weight=0.85,
-                description="Date in parentheses",
-                parse_groups=(1, 2, 3),
-            ),
-            Pattern(  # Example match: "Stand vom 7. Januar 2024" or "Stcmd vom 7. Januar 2024"
-                name="stand_vom_date",
-                regex=r'(?:Stand|Stcmd)\s+vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
-                confidence_weight=0.95,
-                description="High priority: Stand vom date",
-                parse_groups=(1, 2, 3),
-            ),
-            Pattern(  # Example match: "Berlin, den 30. November 2022"
-                name="berlin_den_date",
-                regex=r'Berlin,?\s+den\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
-                confidence_weight=0.98,
-                description="Highest priority: Official Berlin signature date",
-                parse_groups=(1, 2, 3),
-            ),
-            Pattern( # Example match: 19.9.1961
+            Pattern(
                 name="numeric_date",
                 regex=r'(\d{1,2})\.(\d{1,2})\.(\d{4})',
-                confidence_weight=0.7,
-                description="Fully numeric date format: DD.MM.YYYY",
-                parse_groups=(1, 2, 3),
+                confidence=0.7,
+                description="Numeric date: DD.MM.YYYY",
+                field_type="date",
+                parse_groups=(1, 2, 3)
             ),
-            Pattern(  # Example match: "vom 10.9. 1954"
-                name="vom_numeric_date_space",
-                regex=r'vom\s+(\d{1,2})\.(\d{1,2})\.\s+(\d{4})',
-                confidence_weight=0.9,
-                description="vom with numeric date and space: vom DD.MM. YYYY",
-                parse_groups=(1, 2, 3),
-            ),
-            Pattern(  # Example match: "Stand vom 29, Oktober 1937"
-                name="stand_vom_comma_date",
-                regex=r'Stand\s+vom\s+(\d{1,2}),\s*([a-zA-ZäöüÄÖÜß]+)\s+(\d{4})',
-                confidence_weight=0.93,
-                description="Stand vom date with comma instead of period: Stand vom DD, Month YYYY",
-                parse_groups=(1, 2, 3),
-            ),
-
+            Pattern(
+                name="stand_vom_date",
+                regex=r'Stand\s+vom\s+(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})',
+                confidence=0.95,
+                description="Stand vom date",
+                field_type="date",
+                parse_groups=(1, 2, 3)
+            )
         ]
 
-        for pattern in date_patterns:
-            self.register_pattern("date", pattern)
+        # Publisher patterns
+        self.patterns["publisher"] = [
+            Pattern(
+                name="bundesministerium",
+                regex=r'(Bundesministerium\s+für\s+[^.\n]+)',
+                confidence=0.9,
+                description="Federal Ministry",
+                field_type="publisher"
+            ),
+            Pattern(
+                name="reichsministerium",
+                regex=r'(Reichsministerium\s+für\s+[^.\n]+)',
+                confidence=0.9,
+                description="Reich Ministry",
+                field_type="publisher"
+            ),
+            Pattern(
+                name="deutscher_ausschuss",
+                regex=r'(Deutscher\s+Ausschuss\s+für\s+[^.\n]{5,40})',
+                confidence=0.85,
+                description="German Committee",
+                field_type="publisher"
+            )
+        ]
 
-    # def _add_publisher_patterns(self):
-    #     """Add publisher extraction patterns"""
-    #     publisher_patterns = [
-    #         Pattern(
-    #             name="bearbeitet_vom",
-    #             regex=r'bearbeitet\s+vom\s*\n?\s*([^\n.]{10,80})',
-    #             confidence_weight=0.9,
-    #             description="'bearbeitet vom' publisher indicator"
-    #         ),
-    #         Pattern(
-    #             name="deutscher_ausschuss",
-    #             regex=r'(Deutscher\s+Ausschuss?\s+für\s+[^.\n]{5,40})\s*(?:\([^)]+\))?\s*[Ee]\.?[Vv]\.?',
-    #             confidence_weight=0.85,
-    #             description="German Committee organizations"
-    #         ),
-    #         Pattern(
-    #             name="reichsministerium",
-    #             regex=r'(Reichsministerium\s+für\s+[^.\n]+)',
-    #             confidence_weight=0.9,
-    #             description="Reich Ministry"
-    #         ),
-    #         Pattern(
-    #             name="bundesministerium",
-    #             regex=r'(Bundesministerium\s+für\s+[^.\n]+)',
-    #             confidence_weight=0.9,
-    #             description="Federal Ministry"
-    #         ),
-    #         Pattern(
-    #             name="preussisches_ministerium",
-    #             regex=r'(Preußisches?\s+Ministerium\s+[^.\n]+)',
-    #             confidence_weight=0.85,
-    #             description="Prussian Ministry"
-    #         ),
-    #         Pattern(
-    #             name="deutsche_arbeitsfront",
-    #             regex=r'(Deutsche\s+Arbeitsfront)',
-    #             confidence_weight=0.8,
-    #             description="German Labor Front"
-    #         )
-    #     ]
-    #
-    #     for pattern in publisher_patterns:
-    #         self.register_pattern("publisher", pattern)
-    #
-    # def _add_title_patterns(self):
-    #     """Add title extraction patterns"""
-    #     title_patterns = [
-    #         Pattern(
-    #             name="berufs_eignungsanforderungen",
-    #             regex=r'(?:Berufs-?\s*)?([A-ZÄÖÜ][a-zäöüß]*anforderungen)\s*(?:\n.*?)?\s*(?:für|fü r)\s+([^.\n]{10,60})',
-    #             confidence_weight=0.9,
-    #             description="Professional requirements format"
-    #         ),
-    #         Pattern(
-    #             name="verordnung_title",
-    #             regex=r'(?:Verordnung|Anordnung|Gesetz|Bestimmungen|Richtlinien)\s+(?:über|für|zur|betreffend)\s+([^.\n]{20,100})',
-    #             confidence_weight=0.85,
-    #             description="Regulation/law titles"
-    #         ),
-    #         Pattern(
-    #             name="general_title",
-    #             regex=r'^([A-ZÄÖÜ][^.\n]{15,80})',
-    #             confidence_weight=0.6,
-    #             description="General title pattern"
-    #         )
-    #     ]
-    #
-    #     for pattern in title_patterns:
-    #         self.register_pattern("title", pattern)
-    #
-    # def _add_document_type_patterns(self):
-    #     """Add document type patterns"""
-    #     doc_type_patterns = [
-    #         Pattern(
-    #             name="eignungsanforderungen",
-    #             regex=r'[Ee]ignungsanforderungen|Berufs-?[Ee]ignungsanforderungen',
-    #             confidence_weight=0.9,
-    #             description="Professional aptitude requirements"
-    #         ),
-    #         Pattern(
-    #             name="pruefungsordnung",
-    #             regex=r'\bPrüfungsordnung\b|\bPrüfungsanforderungen\b',
-    #             confidence_weight=0.9,
-    #             description="Examination regulations"
-    #         ),
-    #         Pattern(
-    #             name="lehrplan",
-    #             regex=r'\bLehrplan\b|\bLehrpläne\b',
-    #             confidence_weight=0.85,
-    #             description="Curriculum/teaching plan"
-    #         ),
-    #         Pattern(
-    #             name="ausbildungsordnung",
-    #             regex=r'\bAusbildungsordnung\b',
-    #             confidence_weight=0.9,
-    #             description="Training regulations"
-    #         ),
-    #         Pattern(
-    #             name="verordnung",
-    #             regex=r'\bVerordnung\b|\bAnordnung\b',
-    #             confidence_weight=0.8,
-    #             description="Regulation/decree"
-    #         )
-    #     ]
-    #
-    #     for pattern in doc_type_patterns:
-    #         self.register_pattern("document_type", pattern)
-    #
-    # def _add_profession_patterns(self):
-    #     """Add profession extraction patterns"""
-    #     profession_patterns = [
-    #         Pattern(
-    #             name="suffix_fasser",
-    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}fasser)',
-    #             confidence_weight=0.8,
-    #             description="Professions ending in 'fasser'"
-    #         ),
-    #         Pattern(
-    #             name="suffix_macher",
-    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}macher)',
-    #             confidence_weight=0.8,
-    #             description="Professions ending in 'macher'"
-    #         ),
-    #         Pattern(
-    #             name="suffix_schmidt",
-    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}schmidt)',
-    #             confidence_weight=0.8,
-    #             description="Professions ending in 'schmidt'"
-    #         ),
-    #         Pattern(
-    #             name="suffix_bauer",
-    #             regex=r'([A-ZÄÖÜ][a-zäöüß]{6,20}bauer)',
-    #             confidence_weight=0.8,
-    #             description="Professions ending in 'bauer'"
-    #         ),
-    #         Pattern(
-    #             name="common_professions",
-    #             regex=r'(Kaufmann|Mechaniker|Elektriker|Bäcker|Schneider|Tischler)',
-    #             confidence_weight=0.9,
-    #             description="Common profession names"
-    #         )
-    #     ]
-    #
-    #     for pattern in profession_patterns:
-    #         self.register_pattern("profession", pattern)
+        # Document type patterns — generic only
+        self.patterns["document_type"] = [
+            Pattern(
+                name="doc_type_verordnung",
+                regex=r'^\s*(Verordnung)\b',
+                confidence=0.95,
+                description="Document starts with 'Verordnung'",
+                field_type="document_type"
+            ),
+            Pattern(
+                name="doc_type_anordnung",
+                regex=r'\bAnordnung\b',
+                confidence=0.95,
+                description="Anordnung as document type",
+                field_type="document_type"
+            ),
+            Pattern(
+                name="doc_type_pruefungsordnung",
+                regex=r'\b(Prüfungsordnung|Prüfungsanforderungen)\b',
+                confidence=0.95,
+                description="Prüfungsordnung or related",
+                field_type="document_type"
+            ),
+            Pattern(
+                name="doc_type_satzung",
+                regex=r'\bSatzung\b',
+                confidence=0.9,
+                description="Satzung as document type",
+                field_type="document_type"
+            )
+        ]
 
-    def register_pattern(self, field: str, pattern: Pattern):
-        """Register a pattern for a specific field"""
-        if field not in self.patterns:
-            self.patterns[field] = []
-        self.patterns[field].append(pattern)
-        logger.debug(f"Registered pattern '{pattern.name}' for field '{field}'")
+        # Title patterns — full regulation titles
+        self.patterns["title"] = [
+            Pattern(
+                name="title_verordnung_long",
+                regex=r'Verordnung\s+über\s+die\s+Berufsausbildung\s+(?:zum|zur|in der|für|von)?\s?[^\n\(\)]+',
+                confidence=0.92,
+                description="Long regulation title for training professions",
+                field_type="title"
+            ),
+            Pattern(
+                name="title_named_parenthesis",
+                regex=r'\([\w\s\-–]+Ausbildungsverordnung\s*[-–]\s*[^\)]+\)',
+                confidence=0.95,
+                description="Parenthetical named regulation title (e.g., – FKüAusbV)",
+                field_type="title"
+            )
+        ]
+
+        # Author patterns
+        self.patterns["author"] = [
+            Pattern(
+                name="author_herausgeber",
+                regex=r'(?i)(Herausgegeben\s+von\s+.+?)(?:\.|\n)',
+                confidence=0.9,
+                description="Author from 'Herausgegeben von'",
+                field_type="author"
+            ),
+            Pattern(
+                name="author_named",
+                regex=r'(?i)(Autor(?:in)?(?:en)?:\s*[^\n\.]+)',
+                confidence=0.85,
+                description="Line naming author(s)",
+                field_type="author"
+            ),
+            Pattern(
+                name="author_ministry_named",
+                regex=r'(Bundesministerium\s+für\s+[^\n\.]{3,40})',
+                confidence=0.8,
+                description="Ministry as author",
+                field_type="author"
+            )
+        ]
 
     def extract_field(self, text: str, field: str) -> List[Match]:
-        """Extract all matches for a specific field"""
+        """Extract matches for a specific field"""
         matches = []
-        field_patterns = self.patterns.get(field, [])
+        patterns = self.patterns.get(field, [])
 
-        for pattern in field_patterns:
+        for pattern in patterns:
             try:
-                pattern_matches = pattern.find_matches(text)
-                matches.extend(pattern_matches)
-            except Exception as e:
-                logger.warning(f"Pattern {pattern.name} failed: {e}")
+                for match in re.finditer(pattern.regex, text, re.IGNORECASE | re.MULTILINE):
+                    start_context = max(0, match.start() - 50)
+                    end_context = min(len(text), match.end() + 50)
+                    context = text[start_context:end_context]
 
-        # Sort by confidence score (highest first)
+                    match_obj = Match(
+                        value=match.group(0),
+                        confidence=pattern.confidence,
+                        start_pos=match.start(),
+                        end_pos=match.end(),
+                        pattern_name=pattern.name,
+                        context=context
+                    )
+                    matches.append(match_obj)
+            except re.error as e:
+                logging.warning(f"Regex error in pattern {pattern.name}: {e}")
+
+        # Sort by confidence
         matches.sort(key=lambda m: m.confidence, reverse=True)
         return matches
 
-    def get_pattern_info(self) -> Dict[str, List[Dict]]:
-        """Get information about all registered patterns"""
-        info = {}
-        for field, patterns in self.patterns.items():
-            info[field] = [
-                {
-                    'name': p.name,
-                    'description': p.description,
-                    'confidence_weight': p.confidence_weight
-                }
-                for p in patterns
-            ]
-        return info
-
 
 class GermanDateParser:
-    """Specialized parser for German dates in historical documents"""
+    """Specialized German date parser"""
 
     def __init__(self):
         self.german_months = {
-            'januar': 1, 'jan': 1, 'zamuar': 1, 'zanuar': 1, 'jamuar': 1, 'jänner': 1,
-            'februar': 2, 'feb': 2,
-            'märz': 3, 'mär': 3, 'maerz': 3,
-            'april': 4, 'apr': 4, 'aprıl': 4,
-            'mai': 5,
-            'juni': 6, 'jun': 6,
-            'juli': 7, 'jul': 7,
-            'august': 8, 'aug': 8,
-            'september': 9, 'sep': 9, 'sept': 9,
-            'oktober': 10, 'okt': 10,
-            'november': 11, 'nov': 11,
-            'dezember': 12, 'dez': 12, 'deeember': 12, 'dezernber': 12
+            'januar': 1, 'jan': 1, 'februar': 2, 'feb': 2, 'märz': 3, 'mär': 3,
+            'april': 4, 'apr': 4, 'mai': 5, 'juni': 6, 'jun': 6, 'juli': 7, 'jul': 7,
+            'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'oktober': 10, 'okt': 10,
+            'november': 11, 'nov': 11, 'dezember': 12, 'dez': 12
         }
 
     def parse_date_from_match(self, match: Match) -> Optional[datetime]:
-        """Parse a datetime from a date match"""
+        """Parse datetime from a match"""
         try:
-            # Try numeric date with space first (DD.MM. YYYY)
-            numeric_space_match = re.search(r'(\d{1,2})\.(\d{1,2})\.\s+(\d{4})', match.value)
-            if numeric_space_match:
-                day_str, month_str, year_str = numeric_space_match.groups()
-                day = int(day_str)
-                month = int(month_str)
-                year = int(year_str)
-                return datetime(year, month, day)
-
-            # Try numeric date without space (DD.MM.YYYY)
+            # Try numeric date first
             numeric_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', match.value)
             if numeric_match:
-                day_str, month_str, year_str = numeric_match.groups()
-                day = int(day_str)
-                month = int(month_str)
-                year = int(year_str)
+                day, month, year = map(int, numeric_match.groups())
                 return datetime(year, month, day)
 
-            # Then try month names (existing code)
-            regex_match = re.search(r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})', match.value)
-            if regex_match:
-                day_str, month_str, year_str = regex_match.groups()
+            # Try month names
+            text_match = re.search(r'(\d{1,2})\.\s*([a-zA-ZäöüÄÖÜß]+)\s*(\d{4})', match.value)
+            if text_match:
+                day_str, month_str, year_str = text_match.groups()
                 day = int(day_str)
                 year = int(year_str)
                 month_normalized = month_str.lower().strip()
@@ -400,137 +229,66 @@ class GermanDateParser:
 
             return None
 
-        except (ValueError, AttributeError) as e:
-            logger.debug(f"Failed to parse date from match: {e}")
+        except (ValueError, AttributeError):
             return None
 
-    def score_date_context(self, match: Match) -> float:
-        """Score a date match based on context indicators"""
-        context = match.context.lower()
-        score = match.confidence
 
-        # Very high priority indicators
-        very_high_indicators = [
-            r'berlin,?\s+den',
-            r'münchen,?\s+den',
-        ]
+class MetadataExtractor:
+    """Main metadata extraction engine"""
 
-        for indicator in very_high_indicators:
-            if re.search(indicator, context):
-                score += 0.3
-
-        # High priority indicators
-        high_indicators = [
-            r'stand\s+vom',
-            r'stcmd\s+vom',
-            r'\(.*?stand.*?vom',
-            r'\(.*?stcmd.*?vom',
-        ]
-
-        for indicator in high_indicators:
-            if re.search(indicator, context):
-                score += 0.2
-
-        # Medium priority indicators
-        medium_indicators = [
-            r'ausgegeben\s+am',
-            r'verkündet\s+am',
-            r'wirkung\s+vom',
-        ]
-
-        for indicator in medium_indicators:
-            if re.search(indicator, context):
-                score += 0.12
-
-        # Pattern-specific bonuses
-        if 'vom' in match.value.lower():
-            score += 0.08
-
-        if 'den' in match.value.lower():
-            score += 0.06
-
-        # Parentheses bonus
-        if '(' in context and ')' in context:
-            score += 0.10
-
-        # Position scoring (earlier text gets bonus)
-        relative_pos = match.start_pos / len(match.context) if match.context else 0.5
-        if relative_pos < 0.2:
-            score += 0.08
-        elif relative_pos < 0.4:
-            score += 0.04
-
-        # Negative indicators
-        negative_indicators = [
-            r'seit\s+dem',
-            r'ab\s+dem',
-            r'erfolgte',
-            r'geboren.*am',
-            r'verstorben.*am',
-        ]
-
-        for neg_indicator in negative_indicators:
-            if re.search(neg_indicator, context):
-                score -= 0.05
-
-        return max(score, 0.0)
-
-
-class PatternBasedExtractor:
-    """Main pattern-based extraction engine"""
-
-    def __init__(self, pattern_registry: Optional[PatternRegistry] = None):
-        self.pattern_registry = pattern_registry or PatternRegistry()
+    def __init__(self):
+        self.pattern_registry = PatternRegistry()
         self.date_parser = GermanDateParser()
 
-    def extract_metadata_fields(self, text: str) -> Dict[str, Tuple[Optional[str], float]]:
-        """Extract all metadata fields using patterns"""
-        results = {}
+    def extract_metadata(self, text: str) -> ExtractedMetadata:
+        """Extract all metadata from text"""
+        metadata = ExtractedMetadata()
 
-        # Extract each field type
-        for field in ['title', 'publisher', 'document_type', 'profession']:
+        # Extract each field
+        for field in ['title', 'publisher', 'document_type', 'profession', 'author']:
             matches = self.pattern_registry.extract_field(text, field)
             if matches:
-                best_match = matches[0]  # Highest confidence
-                results[field] = (best_match.value, best_match.confidence)
-            else:
-                results[field] = (None, 0.0)
+                best_match = matches[0]
+                setattr(metadata, field, best_match.value)
+                metadata.confidence_scores[field] = best_match.confidence
 
         # Special handling for dates
-        date_result = self.extract_date(text)
-        results['date'] = date_result
+        date_result, date_confidence = self._extract_date(text)
+        if date_result:
+            metadata.date = date_result
+            metadata.year = date_result.year
+            metadata.confidence_scores['date'] = date_confidence
 
-        return results
+        # Set text preview
+        metadata.raw_text_preview = text[:1000] + "..." if len(text) > 1000 else text
 
-    def extract_date(self, text: str) -> Tuple[Optional[datetime], float]:
-        """Simplified date extraction"""
-        # Pre-process OCR errors
-        text = re.sub(r'\bl\.\s*([a-zA-ZäöüÄÖÜß]+)', r'1. \1', text)
+        return metadata
 
-        # Get matches
+    def _extract_date(self, text: str) -> Tuple[Optional[datetime], float]:
+        """Extract date with confidence"""
         date_matches = self.pattern_registry.extract_field(text, "date")
         if not date_matches:
             return None, 0.0
 
-        # Parse and score
-        scored_dates = []
+        best_date = None
+        best_confidence = 0.0
+
         for match in date_matches:
-            # Use pattern's own parsing instead of duplicate code
-            parsed_date = self._parse_using_pattern(match)
+            parsed_date = self.date_parser.parse_date_from_match(match)
             if parsed_date:
-                context_score = self.date_parser.score_date_context(match)
-                scored_dates.append((parsed_date, context_score, match))
+                # Score based on context
+                context_bonus = 0.0
+                context_lower = match.context.lower()
 
-        if not scored_dates:
-            return None, 0.0
+                if 'stand vom' in context_lower:
+                    context_bonus += 0.2
+                elif 'vom' in context_lower:
+                    context_bonus += 0.1
 
-        # Return best
-        best_date, best_score, best_match = max(scored_dates, key=lambda x: x[1])
-        return best_date, best_score
+                total_confidence = match.confidence + context_bonus
 
-    def _parse_using_pattern(self, match: Match) -> Optional[datetime]:
-        """Use the pattern that created the match to parse it"""
-        for pattern in self.pattern_registry.patterns.get("date", []):
-            if pattern.name == match.pattern_name and pattern.parse_groups:
-                return pattern.parse_date(match.value)
-        return None
+                if total_confidence > best_confidence:
+                    best_date = parsed_date
+                    best_confidence = total_confidence
+
+        return best_date, min(best_confidence, 1.0)
