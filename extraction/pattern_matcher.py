@@ -91,28 +91,78 @@ class PatternRegistry:
             )
         ]
 
-        # Document type patterns
+        # Document type patterns — generic only
         self.patterns["document_type"] = [
             Pattern(
-                name="eignungsanforderungen",
-                regex=r'[Ee]ignungsanforderungen|Berufs-?[Ee]ignungsanforderungen',
-                confidence=0.9,
-                description="Professional aptitude requirements",
+                name="doc_type_verordnung",
+                regex=r'^\s*(Verordnung)\b',
+                confidence=0.95,
+                description="Document starts with 'Verordnung'",
                 field_type="document_type"
             ),
             Pattern(
-                name="pruefungsordnung",
-                regex=r'\bPrüfungsordnung\b|\bPrüfungsanforderungen\b',
-                confidence=0.9,
-                description="Examination regulations",
+                name="doc_type_anordnung",
+                regex=r'\bAnordnung\b',
+                confidence=0.95,
+                description="Anordnung as document type",
                 field_type="document_type"
             ),
             Pattern(
-                name="verordnung",
-                regex=r'\bVerordnung\b|\bAnordnung\b',
+                name="doc_type_pruefungsordnung",
+                regex=r'\b(Prüfungsordnung|Prüfungsanforderungen)\b',
+                confidence=0.95,
+                description="Prüfungsordnung or related",
+                field_type="document_type"
+            ),
+            Pattern(
+                name="doc_type_satzung",
+                regex=r'\bSatzung\b',
+                confidence=0.9,
+                description="Satzung as document type",
+                field_type="document_type"
+            )
+        ]
+
+        # Title patterns — full regulation titles
+        self.patterns["title"] = [
+            Pattern(
+                name="title_verordnung_long",
+                regex=r'Verordnung\s+über\s+die\s+Berufsausbildung\s+(?:zum|zur|in der|für|von)?\s?[^\n\(\)]+',
+                confidence=0.92,
+                description="Long regulation title for training professions",
+                field_type="title"
+            ),
+            Pattern(
+                name="title_named_parenthesis",
+                regex=r'\([\w\s\-–]+Ausbildungsverordnung\s*[-–]\s*[^\)]+\)',
+                confidence=0.95,
+                description="Parenthetical named regulation title (e.g., – FKüAusbV)",
+                field_type="title"
+            )
+        ]
+
+        # Author patterns
+        self.patterns["author"] = [
+            Pattern(
+                name="author_herausgeber",
+                regex=r'(?i)(Herausgegeben\s+von\s+.+?)(?:\.|\n)',
+                confidence=0.9,
+                description="Author from 'Herausgegeben von'",
+                field_type="author"
+            ),
+            Pattern(
+                name="author_named",
+                regex=r'(?i)(Autor(?:in)?(?:en)?:\s*[^\n\.]+)',
+                confidence=0.85,
+                description="Line naming author(s)",
+                field_type="author"
+            ),
+            Pattern(
+                name="author_ministry_named",
+                regex=r'(Bundesministerium\s+für\s+[^\n\.]{3,40})',
                 confidence=0.8,
-                description="Regulation/decree",
-                field_type="document_type"
+                description="Ministry as author",
+                field_type="author"
             )
         ]
 
@@ -195,7 +245,7 @@ class MetadataExtractor:
         metadata = ExtractedMetadata()
 
         # Extract each field
-        for field in ['title', 'publisher', 'document_type', 'profession']:
+        for field in ['title', 'publisher', 'document_type', 'profession', 'author']:
             matches = self.pattern_registry.extract_field(text, field)
             if matches:
                 best_match = matches[0]

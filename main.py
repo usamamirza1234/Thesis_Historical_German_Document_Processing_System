@@ -50,13 +50,13 @@ def main_example():
     processor = SmartGermanDocumentProcessor(config)
 
     # Example document path
-    file_path = "pdfs/30s/30s/berufearchiv_5542.pdf"
+    file_path = "pdfs/30s/berufearchiv_5496.pdf"
 
     try:
         print(f"🔄 Processing: {file_path}")
 
         # Process document
-        metadata = processor.process_document(file_path, start_page=5, end_page=7)
+        metadata = processor.process_document(file_path, start_page=1, end_page=2)
 
         print(f"\n✅ Processing Results:")
         print(f"📅 Date: {metadata.date}")

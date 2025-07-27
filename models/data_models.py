@@ -42,7 +42,7 @@ class Match:
     start_pos: int
     end_pos: int
     pattern_name: str
-    context: str = ""
+    context: Optional[str] = None
 
 
 @dataclass
